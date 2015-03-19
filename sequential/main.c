@@ -5,49 +5,22 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <debug.h>
+#include <print.h>
+#include <rank_sort.h>
 
 #define MAX_ELEM              (100000)
 
+#ifndef PROG_NAME
+#define PROG_NAME             (__FILE__)
+#endif
+
 void
-print_time (struct timeval *initial, struct timeval *final)
+print_usage (void)
 {
-	int secs;
-	int msecs;
-	int usecs;
-
-	msecs = (int) (final->tv_usec - initial->tv_usec) / 1000;
-	usecs = (int) (final->tv_usec - initial->tv_usec) % 1000;
-	secs = (int) (final->tv_sec - initial>tv_sec);
-
-	if (msecs < 0) {
-		secs--;
-		msecs = 1000 + msecs;
-	}
-
-	if (usecs < 0) {
-		msecs--;
-		usecs = 1000 + usecs;
-	}
-
-	printf("Elasped Time: %ds:%dms:%dus\n", secs, msecs, usecs);
-}
-
-static inline void
-rank_sort (int *fuzzy, int *sort, int size)
-{
-	int i;
-	int j;
-	int x;
-
-	for (i = 0; i < size; i++) {
-		x = 0;
-		for (j = 0; j < size; j++) {
-			if (fuzzy[i] > fuzzy[j]) {
-				x++;
-			}
-		}
-		sort[x] = fuzzy[i];
-	}
+	printf("Usage: "PROG_NAME" FILE SIZE\n");
+	printf("\n\tFILE        File containing vector data\n");
+	printf("\tSIZE        Size of vector (Maximum size: %d)\n", MAX_ELEM);
 }
 
 int
@@ -61,22 +34,24 @@ main (int argc, char **argv)
 	FILE *fd;
 
 	if (argc != 3) {
-		perror("Invalid argument number!");
+		print_usage();
+		exit (1);
 	}
 
 	size = atoi(argv[1]);
 	if (size < 1 || size >= MAX_ELEM) {
-		perror("Invalid number of elements!");
+		print_error("Invalid number of elements: %d!", size);
+		exit (1);
 	}
 
 	fd = fopen(argv[0], "r");
 	if (!fd) {
-		perror("Invalid filename!");
+		print_errno("fopen() failed!");
 	}
 
 	memset(readv, 0, sizeof(readv)*sizeof(*readv));
 	if (fread(readv, sizeof(*readv), sizeof(readv), fd) < 0) {
-		perror("fread() error!");
+		print_errno("fread() failed!");
 	}
 
 	fclose(fd);
