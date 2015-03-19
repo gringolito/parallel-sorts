@@ -12,26 +12,30 @@
 #define MAX_ELEM              (100000)
 
 #ifndef PROG_NAME
-#define PROG_NAME             (__FILE__)
+#define PROG_NAME             (prgname)
 #endif
+
+static char* prgname;
 
 void
 print_usage (void)
 {
-	printf("Usage: "PROG_NAME" FILE SIZE\n");
-	printf("\n\tFILE        File containing vector data\n");
+	printf("Usage: %s SIZE FILE\n", PROG_NAME);
 	printf("\tSIZE        Size of vector (Maximum size: %d)\n", MAX_ELEM);
+	printf("\tFILE        File containing vector data\n");
 }
 
 int
 main (int argc, char **argv)
 {
 	int size;
-	int readv[MAX_ELEM];
-	int sortv[MAX_ELEM];
-	struct timeval tvi;
-	struct timeval tvf;
+	int readv[MAX_ELEM + 1];
+	int sortv[MAX_ELEM + 1];
+	struct timeval begin;
+	struct timeval end;
 	FILE *fd;
+
+	prgname = argv[0];
 
 	if (argc != 3) {
 		print_usage();
@@ -39,28 +43,28 @@ main (int argc, char **argv)
 	}
 
 	size = atoi(argv[1]);
-	if (size < 1 || size >= MAX_ELEM) {
+	if (size < 1 || size > MAX_ELEM) {
 		print_error("Invalid number of elements: %d!", size);
 		exit (1);
 	}
 
-	fd = fopen(argv[0], "r");
+	fd = fopen(argv[2], "r");
 	if (!fd) {
 		print_errno("fopen() failed!");
 	}
 
-	memset(readv, 0, sizeof(readv)*sizeof(*readv));
+	memset(readv, 0, size * sizeof(*readv));
 	if (fread(readv, sizeof(*readv), sizeof(readv), fd) < 0) {
 		print_errno("fread() failed!");
 	}
 
 	fclose(fd);
 
-	gettimeofday(&tvi, NULL);
+	gettimeofday(&begin, NULL);
 	rank_sort(readv, sortv, size);
-	gettimeofday(&tvf, NULL);
+	gettimeofday(&end, NULL);
 
-	print_time(&tvi, &tvf);
+	print_time(begin, end);
 
 	return (0);
 }
