@@ -35,6 +35,4 @@ tags
 *.x86_64
 *.hex
 bin/*
-sequential/sequential
-parallel/parallel
 
