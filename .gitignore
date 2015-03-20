@@ -20,6 +20,13 @@
 *.so.*
 *.dylib
 
+# Exuberant CTAGS
+tags
+
+# Vim and temporay files related
+*.swp
+*~
+
 # Executables
 *.exe
 *.out
@@ -27,3 +34,7 @@
 *.i*86
 *.x86_64
 *.hex
+bin/*
+sequential/sequential
+parallel/parallel
+
