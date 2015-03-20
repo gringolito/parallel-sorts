@@ -11,13 +11,13 @@
 // Personal Debug macros
 //
 
+#ifndef __FUTZIG_DEBUG_H
+#define __FUTZIG_DEBUG_H
+
 #include <stdarg.h>
 #include <stdio.h>
 #include <err.h>
 #include <errno.h>
-
-#ifndef __FUTZIG_DEBUG_H
-#define __FUTZIG_DEBUG_H
 
 #ifdef DEBUG
 #define print_debug(...)   do {                                     \
