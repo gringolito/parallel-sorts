@@ -5,77 +5,82 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
-#include <debug.h>
-#include <print.h>
+#include <utils.h>
 #include <rank_sort.h>
 #include <mpi.h>
 
 #define MAX_ELEM              (100000)
-#define EVER                  (;;)
 #define MPI_MASTER            (0)
 #define MPI_TAG               (0)
-
-#ifndef PROG_NAME
-#define PROG_NAME             (__FILE__)
-#endif
+#define MPI_TERMINATE         (-1)
 
 void
 print_usage (void)
 {
 	printf("Usage: %s FILE SIZE\n", PROG_NAME);
-	printf("\n\tFILE        File containing vector data\n");
+	printf("\tFILE        File containing vector data\n");
 	printf("\tSIZE        Size of vector (Maximum size: %d)\n", MAX_ELEM);
 }
 
 static void
-do_master_stuff (int slaves, char *file, int elements)
+do_master_stuff (int jobs, const char *file, int elements)
 {
-	FILE *fd;
 	int i;
+	int ret;
+	int slaves;
 	int slice;
-	int begin;
 	int last;
 	int source;
+	int remaining;
 	int *readv;
 	int *sortv;
+	FILE *fd;
 	struct timeval begin;
 	struct timeval end;
 	MPI_Status status;
-	int cont_pos = 1; // variavel de posicao para colocar no vetor final
-	int vezes = elements / slice; // quntas vezes deve ser executado o loop
-	int passa = vezes; // variavel para controlar quanta vezes ele deve passar pelo loop
 
 	fd = fopen(file, "r");
 	if (!fd) {
 		print_errno("fopen() failed!");
+		exit(ret);
 	}
 
 	sortv = calloc(elements, sizeof(*sortv));
 	readv = calloc(elements, sizeof(*readv));
-	if (fread(readv, elements, sizeof(readv), fd) < 0) {
+	ret = fread(readv, elements, sizeof(readv), fd);
+	if (ret < 0) {
 		print_errno("fread() failed!");
+		exit(ret);
 	}
 	fclose(fd);
 
-	// Number of elements ordered by a single slave by time
+	remaining = elements;
+
+	// Maximum number of elements sorted by a single slave at a time
+	slaves = jobs - 1;
 	slice = elements / (4 * slaves);
 
 	gettimeofday(&begin, NULL);
 
 	last = 0;
-	for (i = 1; i <= slaves; i++) {
+	for (i = 0; i < jobs; i++) {
+		if (i == MPI_MASTER) {
+			continue;
+		}
 		MPI_Send(&slice, 1, MPI_INT, i, MPI_TAG, MPI_COMM_WORLD);
 		MPI_Send(&readv[last], slice, MPI_INT, i, MPI_TAG, MPI_COMM_WORLD);
 		last += slice;
+		remaining -= slice;
 	}
 
-	while (vezes != 0) { // para poder receber de todos os escravos
-		MPI_Recv(slave_vector, slice, MPI_INT, MPI_ANY_SOURCE, MPI_TAG, MPI_COMM_WORLD, &status);
-		source = status.MPI_SOURCE; // recebeu deste escravo
-		vezes = vezes - 1; // decrementa valor
-		/******************************************************
-		Recebe do escravo e coloca no vetor
-		*******************************************************/
+	while (remaining) {
+		MPI_Recv(sortv, slice, MPI_INT, MPI_ANY_SOURCE, MPI_TAG,
+		    MPI_COMM_WORLD, &status);
+		MPI_Get_count(&status, MPI_INT, &ret);
+		source = status.MPI_SOURCE;
+
+// TODO VERIFICAR LOGICA DE MERGE
+		// Recebe do escravo e coloca no vetor
 		for (j = 0, i = (cont_pos-1); i < cont_pos + (slice-1); i++, j++) { // receber vetor do escravo
 			vector[i] = slave_vector[j];
 		}
@@ -83,24 +88,21 @@ do_master_stuff (int slaves, char *file, int elements)
 			merge(vector, 0, cont_pos-1, cont_pos+slice-1); // ordena
 		}
 		cont_pos = (slice * ((cont+1)-slaves) + 1); // aumenta posicao do vetor final	
-		if ((last) < elements) { // ainda tem que gerar elementos
-			begin = (slice * cont) + 1; // inicio do pedaco
-			MPI_Send(&begin, 1, MPI_INT, source, MPI_TAG, MPI_COMM_WORLD);
-			fim =  (slice * (cont + 1)); // fim do pedaco
-			MPI_Send(&fim, 1, MPI_INT, source, MPI_TAG, MPI_COMM_WORLD);
-		}
+// TODO FIM DA LOGICA DE MERGE
 
-		if (cont < passa + slaves) { // para não passar o tamanho do vetor
-			cont++;
-		}
-		last = (slice * (cont)); // ataualiza valores já enviados
+		slice = MIN(slice, remaining);
+		MPI_Send(&readv[last], slice, MPI_INT, source, MPI_TAG,
+		    MPI_COMM_WORLD);
+		last += slice;
 	}
 
-	begin = -1;
+	remaining = MPI_TERMINATE;
 
-	for (i = 1; i <= slaves; i++) {
-		// envia valor para encerrar escravo
-		MPI_Send(&begin, 1, MPI_INT, i, MPI_TAG, MPI_COMM_WORLD);
+	for (i = 0; i < jobs; i++) {
+		if (i == MPI_MASTER) {
+			continue;
+		}
+		MPI_Send(&remaining, 1, MPI_INT, i, MPI_TAG, MPI_COMM_WORLD);
 	}
 
 	gettimeofday(&end, NULL);
@@ -109,10 +111,10 @@ do_master_stuff (int slaves, char *file, int elements)
 }
 
 static void
-do_slave_stuff (void)
+do_slave_stuff (int pid)
 {
 	int size;
-	int received;
+	int rec_size;
 	int *recv;
 	int *sortv;
 	MPI_Status status;
@@ -123,16 +125,17 @@ do_slave_stuff (void)
 	recv = calloc(size, sizeof(*recv));
 	sortv = calloc(size, sizeof(*sortv));
 
-	for (EVER) { // fica trabalhando enquanto o mestre não terminar
+	for (EVER) {
 		MPI_Recv(recv, size, MPI_INT, MPI_MASTER, MPI_TAG,
 		    MPI_COMM_WORLD, &status);
-		MPI_Get_count(&status, MPI_INT, &received);
-		if (received == 1 && recv[0] == -1) {
+		MPI_Get_count(&status, MPI_INT, &rec_size);
+		if (rec_size == 1 && recv[0] == MPI_TERMINATE) {
 			break;
-		} else {
-			rank_sort(recv, sortv, received);
-			MPI_Send(sortv, received, MPI_INT, MPI_MASTER, MPI_TAG,
-			    MPI_COMM_WORLD);
+		}
+
+		rank_sort(recv, sortv, received);
+		MPI_Send(sortv, rec_size, MPI_INT, MPI_MASTER, MPI_TAG,
+		    MPI_COMM_WORLD);
 	}
 
 	free(recv);
@@ -140,10 +143,12 @@ do_slave_stuff (void)
 }
 
 int
-main (int argc, char **argv)
+main (int argc, const char **argv)
 {
 	int pid;
 	int jobs;
+
+	prgname = argv[0];
 
 	if (argc != 3) {
 		print_usage();
@@ -155,13 +160,13 @@ main (int argc, char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &jobs);
 
 	if (pid == MPI_MASTER) {
-		int size = atoi(argv[1]);
+		int size = atoi(argv[2]);
 		if (size < 1 || size >= MAX_ELEM) {
 			print_error("Invalid number of elements: %d!", size);
 			exit (1);
 		}
 
-		do_master_stuff(jobs - 1, argv[0], size);
+		do_master_stuff(jobs, argv[1], size);
 	} else {
 		do_slave_stuff(pid);
 	}
