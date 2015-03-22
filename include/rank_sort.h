@@ -42,29 +42,21 @@ merge_vector (int *vector, int begin, int mid, int end)
 	int im = mid;
 	int j;
 	int size = end - begin;
-	int *tmp;
-
-	tmp = calloc(size, sizeof(*tmp));
-	if (!tmp) {
-		print_errno("calloc() failed!");
-		return (-1);
-	}
+	int tmp[size];
 
 	for (j = 0; j < size; j++) {
 		if (ib < mid && (im >= end || vector[ib] <= vector[im])) {
 			tmp[j] = vector[ib];
-			ib = ib +1;
+			ib++;
 		} else {
 			tmp[j] = vector[im];
-			im = im + 1;
+			im++;
 		}
 	}
 
 	for (j = 0, ib = begin; ib < end; j++, ib++) {
 		vector[ib] = tmp[j];
 	}
-
-	free(tmp);
 
 	return (0);
 }
