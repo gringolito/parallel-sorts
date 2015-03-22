@@ -34,6 +34,7 @@ print_usage (void)
 int
 main (int argc, const char **argv)
 {
+	int i;
 	int ret;
 	int size;
 	int *readv;
@@ -62,12 +63,13 @@ main (int argc, const char **argv)
 
 	readv = calloc(size, sizeof(*readv));
 	sortv = calloc(size, sizeof(*sortv));
-	ret = fread(readv, sizeof(*readv), size, fd);
-	if (ret < 0) {
-		print_errno("fread() failed!");
-		return (ret);
+	for (i = 0; i < size; i++) {
+		ret = fscanf(fd, "%d", &readv[i]);
+		if (ret < 0) {
+			print_errno("fscanf() failed!");
+			return (ret);
+		}
 	}
-
 	fclose(fd);
 
 	gettimeofday(&begin, NULL);
@@ -75,6 +77,18 @@ main (int argc, const char **argv)
 	gettimeofday(&end, NULL);
 
 	print_time(begin, end);
+
+	fd = fopen("sorted_vector.txt", "w");
+	if (!fd) {
+		print_errno("fopen() failed!");
+		exit(1);
+	}
+
+	for (i = 0; i < size; i++) {
+		fprintf(fd, "%d\n", sortv[i]);
+	}
+	fclose(fd);
+	printf("The result can be found at file 'sorted_vector.txt'\n");
 
 	free(readv);
 	free(sortv);
