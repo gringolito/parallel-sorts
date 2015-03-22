@@ -70,3 +70,4 @@ merge_vector (int *vector, int begin, int mid, int end)
 }
 
 #endif //__FUTZIG_RANK_SORT_H
+
