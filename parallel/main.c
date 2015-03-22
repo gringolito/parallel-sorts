@@ -1,3 +1,16 @@
+// main.c
+//
+// Copyright (c) 2015 Filipe Utzig. All rights reserved.
+//
+// Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/19/15.
+//
+// The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+// "SHOULD", "SHOULD NOT", "RECOMMENDED",  "MAY", and "OPTIONAL" in
+// this document are to be interpreted as described in RFC 2119.
+//
+// Yet another sort app using rank_sort algothim (Parallel MPI implementation)
+//
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
@@ -29,7 +42,8 @@ do_master_stuff (int jobs, const char *file, int elements)
 	int ret;
 	int slaves;
 	int slice;
-	int last;
+	int last_send;
+	int last_recv;
 	int source;
 	int remaining;
 	int *readv;
@@ -62,38 +76,30 @@ do_master_stuff (int jobs, const char *file, int elements)
 
 	gettimeofday(&begin, NULL);
 
-	last = 0;
+	last_send = 0;
 	for (i = 0; i < jobs; i++) {
 		if (i == MPI_MASTER) {
 			continue;
 		}
 		MPI_Send(&slice, 1, MPI_INT, i, MPI_TAG, MPI_COMM_WORLD);
-		MPI_Send(&readv[last], slice, MPI_INT, i, MPI_TAG, MPI_COMM_WORLD);
-		last += slice;
+		MPI_Send(&readv[last_send], slice, MPI_INT, i, MPI_TAG,
+		    MPI_COMM_WORLD);
+		last_send += slice;
 		remaining -= slice;
 	}
 
+	last_recv = 0;
 	while (remaining) {
-		MPI_Recv(sortv, slice, MPI_INT, MPI_ANY_SOURCE, MPI_TAG,
-		    MPI_COMM_WORLD, &status);
+		MPI_Recv(sortv[last_recv], slice, MPI_INT, MPI_ANY_SOURCE,
+		    MPI_TAG, MPI_COMM_WORLD, &status);
 		MPI_Get_count(&status, MPI_INT, &ret);
 		source = status.MPI_SOURCE;
-
-// TODO VERIFICAR LOGICA DE MERGE
-		// Recebe do escravo e coloca no vetor
-		for (j = 0, i = (cont_pos-1); i < cont_pos + (slice-1); i++, j++) { // receber vetor do escravo
-			vector[i] = slave_vector[j];
-		}
-		if (cont > slaves) { // para poder ter recebeido de todos os escravos do FOR antes do WHILE 
-			merge(vector, 0, cont_pos-1, cont_pos+slice-1); // ordena
-		}
-		cont_pos = (slice * ((cont+1)-slaves) + 1); // aumenta posicao do vetor final	
-// TODO FIM DA LOGICA DE MERGE
-
+		merge(sortv, 0, last_recv, last_recv + ret);
+		last_recv += ret;
 		slice = MIN(slice, remaining);
-		MPI_Send(&readv[last], slice, MPI_INT, source, MPI_TAG,
+		MPI_Send(&readv[last_send], slice, MPI_INT, source, MPI_TAG,
 		    MPI_COMM_WORLD);
-		last += slice;
+		last_send += slice;
 	}
 
 	remaining = MPI_TERMINATE;
