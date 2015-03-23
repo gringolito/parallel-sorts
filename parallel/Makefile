@@ -6,7 +6,7 @@
 #***********************************************************************
 CC=mpicc
 #CFLAGS=-Wall -Wextra -std=c99 -pipe -Og -g3
-CFLAGS=-Wall -Wextra -std=c99 -pipe -O3 -J3 -march=native
+CFLAGS=-Wall -Wextra -std=c99 -pipe -O3 -J3
 LDFLAGS=
 EXTRA_CFLAGS=-DPROG_NAME=\"$(TARGET)\"
 DEBUG=no
