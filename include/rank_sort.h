@@ -17,7 +17,7 @@
 #include <stdlib.h>
 #include <debug.h>
 
-inline void
+static inline void
 rank_sort (int *fuzzy, int *sort, int size)
 {
 	int i;
@@ -35,7 +35,7 @@ rank_sort (int *fuzzy, int *sort, int size)
 	}
 }
 
-inline int
+static inline void
 merge_vector (int *vector, int begin, int mid, int end)
 {
 	int ib = begin;
@@ -57,8 +57,6 @@ merge_vector (int *vector, int begin, int mid, int end)
 	for (j = 0, ib = begin; ib < end; j++, ib++) {
 		vector[ib] = tmp[j];
 	}
-
-	return (0);
 }
 
 #endif //__FUTZIG_RANK_SORT_H
