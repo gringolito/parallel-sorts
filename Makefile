@@ -4,29 +4,36 @@
 # All Rights Reserved
 #
 #***********************************************************************
+
 #
 # You probably don't need to modify anything in this Makefile.
 #
-APPS:=
+
+APPS:=sequential parallel
 LIBS:=lib
-DIRS:=src lib
+DIRS:=src/sequential src/parallel lib
 
-.PHONY : $(APPS) $(LIBS) install clean
+.PHONY : $(APPS) $(LIBS) mpi install clean
 
-all : $(APPS)
+all    : $(APPS)
 
-libs : $(LIBS)
+libs   : $(LIBS)
 
-lib:
-	@$(MAKE) -C lib
+$(LIBS):
+	@$(MAKE) -C $@
+
+$(APPS): $(LIBS)
+	@$(MAKE) -C src/$@
+
+mpi    : parallel
 
 install: $(APPS)
 	@for dir in $(APPS); do \
-	$(MAKE) -C src/$$dir install; \
+		$(MAKE) -C src/$$dir install; \
 	done
 
 clean:
 	@for dir in $(DIRS); do \
-	$(MAKE) -C $$dir clean; \
+		$(MAKE) -C $$dir clean; \
 	done
 
