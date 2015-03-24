@@ -20,19 +20,19 @@ all    : $(APPS)
 libs   : $(LIBS)
 
 lib:
-	$(MAKE) -C lib
+	@$(MAKE) -C lib
 
 sequential:
-	$(MAKE) -C src/sequential
+	@$(MAKE) -C src/sequential
 
 parallel:
-	$(MAKE) -C src/parallel
+	@$(MAKE) -C src/parallel
 
 mpi: parallel
 
 install: $(APPS)
 	@for dir in $(APPS); do \
-		$(MAKE) -C $$dir install; \
+		$(MAKE) -C src/$$dir install; \
 	done
 clean:
 	@for dir in $(DIRS); do \
