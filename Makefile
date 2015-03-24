@@ -11,7 +11,7 @@
 
 APPS:=parallel sequential
 LIBS:=lib
-DIRS:=parallel sequential lib
+DIRS:=src/parallel src/sequential lib
 
 .PHONY : $(APPS) $(LIBS) mpi install clean
 
@@ -23,10 +23,10 @@ lib:
 	$(MAKE) -C lib
 
 sequential:
-	$(MAKE) -C sequential
+	$(MAKE) -C src/sequential
 
 parallel:
-	$(MAKE) -C parallel
+	$(MAKE) -C src/parallel
 
 mpi: parallel
 
