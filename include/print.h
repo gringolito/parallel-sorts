@@ -17,3 +17,4 @@
 void print_time (struct timeval init, struct timeval end);
 
 #endif // __FUTZIG_PRINT_H
+
