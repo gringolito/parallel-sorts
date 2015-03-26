@@ -17,6 +17,7 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/time.h>
 #include <utils.h>
 #include <insertion_sort.h>
@@ -53,12 +54,13 @@ main (int argc, const char **argv)
 	size = atoi(argv[2]);
 	if (size < 1 || size > MAX_ELEM) {
 		print_error("Invalid number of elements: %d!", size);
-		exit (1);
+		exit(1);
 	}
 
 	fd = fopen(argv[1], "r");
 	if (!fd) {
 		print_errno("fopen() failed!");
+		exit(1);
 	}
 
 	readv = calloc(size, sizeof(*readv));
