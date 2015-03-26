@@ -17,27 +17,58 @@
 #include <stdarg.h>
 #include <stdint.h>
 #include <string.h>
+#include <sys/time.h>
 #include <utils.h>
 #include <insertion_sort.h>
+
+#define MAX_ELEM                                    (100000)
+
+void
+print_usage (void)
+{
+	printf("Usage: %s FILE SIZE\n", PROG_NAME);
+	printf("\tFILE File containing vector data\n");
+	printf("\tSIZE Size of vector (Maximum size: %d)\n", MAX_ELEM);
+}
 
 int
 main (int argc, const char **argv)
 {
-	FILE *fd;
 	int i;
-	int x;
-	int j;
-	int valor;
-	int aux;
-	int vector[vetorord];
-	int temp[vetorord];
+	int ret;
+	int size;
+	int *readv;
+	int *sortv;
 	struct timeval begin;
 	struct timeval end;
+	FILE *fd;
 
-	fd = fopen(argv[1],"r");
-	for(i = 0; i < vetorord; i++) {
-		fscanf(fd, "%d", &vector[i]);
-		temp[i] = vector[i];
+	prgname = argv[0];
+
+	if (argc != 3) {
+		print_usage();
+		exit(1);
+	}
+
+	size = atoi(argv[2]);
+	if (size < 1 || size > MAX_ELEM) {
+		print_error("Invalid number of elements: %d!", size);
+		exit (1);
+	}
+
+	fd = fopen(argv[1], "r");
+	if (!fd) {
+		print_errno("fopen() failed!");
+	}
+
+	readv = calloc(size, sizeof(*readv));
+	sortv = calloc(size, sizeof(*sortv));
+	for (i = 0; i < size; i++) {
+		ret = fscanf(fd, "%d", &readv[i]);
+		if (ret < 0) {
+			print_errno("fscanf() failed!");
+			return (ret);
+		}
 	}
 	fclose(fd);
 
@@ -47,12 +78,22 @@ main (int argc, const char **argv)
 
 	print_time(begin, end);
 
-	arq = fopen ("sorted_vector.txt", "w");
-	for(i = 0; i < vetorord; i++) {
-		fprintf(arq, "%d\n", vector[i]);
+	fd = fopen("sorted_vector.txt", "w");
+	if (!fd) {
+		print_errno("fopen() failed!");
+		exit(1);
 	}
-	fflush(arq);
-	fclose(arq);
+
+	for (i = 0; i < size; i++) {
+		fprintf(fd, "%d\n", sortv[i]);
+	}
+	fflush(fd);
+	fclose(fd);
+	printf("The result can be found at file 'sorted_vector.txt'\n");
+
+	free(readv);
+	free(sortv);
 
 	return (0);
 }
+

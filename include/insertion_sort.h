@@ -22,18 +22,17 @@ insertion_sort (int *fuzzy, int *sort, int size)
 {
 	int i;
 	int j;
-	int x;
+	int tmp;
 
-	for (i = 0; i < vetorord; i++) {
-		valor = temp[i];
+	for (i = 0; i < size; i++) {
 		for (j = 0; j < i; j++) {
-			if (valor < vector[j]) {
-				aux = vector[j];
-				vector[j] = valor;
-				valor = aux;
+			if (fuzzy[i] < sort[j]) {
+				tmp = sort[j];
+				sort[j] = fuzzy[i];
+				fuzzy[i] = tmp;
 			}
 		}
-		vector[i] = valor;
+		sort[i] = fuzzy[i];
 	}
 }
 
