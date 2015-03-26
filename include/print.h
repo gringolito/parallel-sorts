@@ -14,6 +14,8 @@
 #ifndef __FUTZIG_PRINT_H
 #define __FUTZIG_PRINT_H
 
+#include <sys/time.h>
+
 void print_time (struct timeval init, struct timeval end);
 
 #endif // __FUTZIG_PRINT_H

@@ -11,9 +11,8 @@
 // Some useful print functions
 //
 
+#include <print.h>
 #include <stdio.h>
-#include <time.h>
-#include <sys/time.h>
 
 void
 print_time (struct timeval init, struct timeval end)
