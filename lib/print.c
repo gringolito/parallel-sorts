@@ -1,6 +1,10 @@
 // print.c
 //
-// Copyright (c) 2015 Filipe Utzig. All rights reserved.
+// "THE BEER-WARE LICENSE" (Revision 42):
+// <filipeutzig@gmail.com> wrote this file. As long as you retain this
+// notice you can do whatever you want with this stuff. If we meet some
+// day, and you think this stuff is worth it, you can buy me a beer in
+// return.
 //
 // Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/19/15.
 //
@@ -9,6 +13,9 @@
 // this document are to be interpreted as described in RFC 2119.
 //
 // Some useful print functions
+//
+//    Changelog:
+//    03/31/15 - License revision
 //
 
 #include <print.h>

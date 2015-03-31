@@ -1,6 +1,10 @@
 // insertion_sort.h
 //
-// Copyright (c) 2015 Filipe Utzig. All rights reserved.
+// "THE BEER-WARE LICENSE" (Revision 42):
+// <filipeutzig@gmail.com> wrote this file. As long as you retain this
+// notice you can do whatever you want with this stuff. If we meet some
+// day, and you think this stuff is worth it, you can buy me a beer in
+// return.
 //
 // Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/24/15.
 //
