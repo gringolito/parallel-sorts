@@ -29,6 +29,7 @@
 #define MAX_ELEM                                    (100000)
 #define MPI_TAG                                     (0)
 #define MPI_TERMINATE                               (-1)
+#define FILENAME                                    "sorted_vector.txt"
 
 void
 print_usage (void)
@@ -74,29 +75,18 @@ compara (int id, int *valor, int vector[], int step, int tam)
 	}
 }
 
-/* Função que imprime o vetor resultado de cada etapa */
-void
-Sequencia (int vector[], int tam) { 
-	FILE *arq;
-	int k;
-	arq = fopen ("/home/felipealves/Downloads/MPI/B/Paralelo/operacao.txt", "a+");
-	for (k = 0; k < tam; k++) // recebe todos os valores da etapa
-		fprintf(arq, "%d\n", vector[k]); // ecreve no arquivo
-	fflush(arq);
-	fclose(arq);
-}
-
 static void
-do_first_stage (const char *file, int size, int jobs)
+do_first_stage (const char *file, size_t size, int jobs)
 {
 	int i;
 	int ret;
-	int slice = size / jobs;
-	int readv[size];
-	int sortv[slice + 1];
+	int slice;
+	int *readv;
+	int *sortv;
 	struct timeval begin;
 	struct timeval end;
 	FILE *fd;
+	MPI_Status status;
 
 	fd = fopen(argv[1], "r");
 	if (!fd) {
@@ -104,8 +94,9 @@ do_first_stage (const char *file, int size, int jobs)
 		exit(ret);
 	}
 
+	slice = size / jobs;
 	readv = calloc(size, sizeof(*readv));
-	sortv = calloc(size, sizeof(*sortv));
+	sortv = calloc(slice + 1, sizeof(*sortv));
 	for (i = 0; i < size; i++) {
 		ret = fscanf(fd, "%d", &readv[i]);
 		if (ret < 0) {
@@ -117,32 +108,86 @@ do_first_stage (const char *file, int size, int jobs)
 
 	gettimeofday(&begin);
 
-	valor = temp[j]; // lê o valor da posição
-	Compara(rank, &valor, vector, j, tam); // Compara
-	if (((j+1) == array) && np > 1) // caso percorreu todos os valores e existem mais processadores
-		MPI_Send(&end, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD); // envia para o próximo que pode terminar
+	valor = temp[j];
+	Compara(rank, &valor, vector, j, tam);
+	// envia para o próximo que pode terminar
+	MPI_Send(&end, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD);
 }
 
 static void
-do_pipeline (int id, int size, int jobs)
+do_pipeline (int id, size_t size, int jobs)
 {
-	MPI_Recv(&valor,1,MPI_INT,rank-1,tag,MPI_COMM_WORLD,&status); // recebe do anterior o valor da função Compara
-	if (valor == -1){ // se for igual a 1
-		j = array;  // pode terminar
-		if (rank+1 < np) // se não é o último processador
-			MPI_Send(&end, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD); // envia a mensagem de fim para o próximo 
-	}  
-	else // senão
-		Compara(rank, &valor, vector, j, tam); // Compara valor recebido no MPI_Recv
+	int slice;
+	int elements;
+	int recv;
+	int last;
+	int next;
+	int *buf;
+	FILE fd;
+	MPI_Status status;
 
+	if (id != jobs) {
+		slice = size / jobs;
+		elements = size - slice * id;
+		last = id - 1;
+	} else {
+		// Last stage of pipeline takes the rest of elements
+		slice = size % jobs;
+		elements = slice;
+		next = 0;
+	}
+
+	buf = calloc(slice + 1, sizeof(*buf));
+	
+	while (elements--) {
+		MPI_Recv(&recv, 1, MPI_INT, last, MPI_TAG, MPI_COMM_WORLD,
+		    &status);
+		Compara(id, &recv, buf, j, tam);
+	}
+
+	recv = MPI_TERMINATE;
+	MPI_Send(&recv, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	MPI_Recv(&recv, 1, MPI_INT, last, MPI_TAG, MPI_COMM_WORLD, &status);
+
+	fd = fopen(FILENAME, "a+");
+	if (!fd) {
+		print_errno("fopen() failed!");
+		exit(1);
+	}
+	if (fprint_intvector(fd, buf, slice)) {
+		print_error("fprint_intvector() failed!");
+	}
+	fflush(fd);
+	fclose(fd);
+
+	recv = MPI_TERMINATE;
+	MPI_Send(&recv, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
 }
+
+#if 0
+	int array = atoi(argv[1]); // array será o tamanho de elementos a ordenar
+	if (array < 1)
+		return (1);
+	FILE *fp;
+	int vector[array]; // vetor que vai ser o ordenado e utilizado pelas etapas
+	int temp[array];
+	int rank, // "id" de cada processador
+	    np, // número de processadores
+	    j, // utilizado nos loops
+	    valor, // valor lido pela etapa 0
+	    tag = 0, // utilizado na comunicação MPI
+	    end = -1, // determina que etapa 0 leu todos os valores
+	    imprime = 1; // pode imprimir (sem valor lógico, apenas demonstrativo)
+	struct timeval ti, tf; // para imprimir tempo
+	int tam = array / np; // é a variável que dirá o tamanho de cada etapa
+#endif
 
 int
 main (int argc, const char **argv)
 {
 	int id;
 	int jobs;
-
+	size_t size;
 
 	prgname = argv[0];
 
@@ -151,7 +196,7 @@ main (int argc, const char **argv)
 		exit(1);
 	}
 
-	size = atoi(argv[2]);
+	size = (size_t) atoi(argv[2]);
 	if (size < 1 || size > MAX_ELEM) {
 		print_error("Invalid number of elements: %d!", size);
 		exit (1);
@@ -167,70 +212,8 @@ main (int argc, const char **argv)
 		do_pipeline(id, size, jobs);
 	}
 
-
-
-
-	int array = atoi(argv[1]); // array será o tamanho de elementos a ordenar
-	if (array < 1)
-		return (1);
-	FILE *fp;
-	int vector[array]; // vetor que vai ser o ordenado e utilizado pelas etapas
-	int temp[array];
-	int rank, // "id" de cada processador
-	    np, // número de processadores
-	    j, // utilizado nos loops
-	    valor, // valor lido pela etapa 0
-	    tag = 0, // utilizado na comunicação MPI
-	    end = -1, // determina que etapa 0 leu todos os valores
-	    imprime = 1; // pode imprimir (sem valor lógico, apenas demonstrativo)
-	struct timeval ti, tf; // para imprimir tempo
-	/******************************************************************
-	   Fecha arquivo
-	 *****************************************************************/
-	MPI_Status status;
-	MPI_Init(&argc,&argv);
-	MPI_Comm_size(MPI_COMM_WORLD,&np);
-	MPI_Comm_rank(MPI_COMM_WORLD,&rank);
-
-	int tam = array / np; // é a variável que dirá o tamanho de cada etapa
-	/*****************************************************************/
-	if (rank == 0) { // caso seja a etapa 0
-		remove("/home/felipealves/Downloads/MPI/B/Paralelo/operacao.txt"); // remove, caso existir o arquivo de saída
-		gettimeofday(&ti, NULL); // tempo inicial
-	}
-	/*****************************************************************/
-	for (j = 0; j < array; j++){ // percorre todos os valores
-		if(rank == 0){ // caso seja a etapa 0
-		}
-		else { // todas as outras etapas
-		}
-	}
-	/***************************************************************/
-	MPI_Barrier(MPI_COMM_WORLD); /* Espera todos os processadores chegara até aqui */
-	if(rank == 0){ // se for a etapa zero
-		gettimeofday(&tf, NULL); // pega o tempo final
-		imprime_tempo(ti, tf);  // imprime
-	}
-	/***************************************************************/
-	MPI_Barrier(MPI_COMM_WORLD); // espera todos os processadores chegarem até aqui
-	if(rank == 0){ // se for a etapa zero
-		Sequencia(vector, tam); // imprime sua parte
-		if (rank+1 < np) // senão for o último processador
-			MPI_Send(&imprime, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD); // manda para o próximo que pode imprimir
-	}
-	else {
-		MPI_Recv(&imprime,1,MPI_INT,rank-1,tag,MPI_COMM_WORLD,&status); // recebe do anterior que pode imprimir seus valores
-		Sequencia(vector, tam); // imprime sua parte
-		if (rank+1 < np) // senão for o último processador
-			MPI_Send(&imprime, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD); // manda para o próximo que pode imprimir
-	}
-	MPI_Barrier(MPI_COMM_WORLD); // espera todos chegarem até aqui
-
-
-
-
-
 	MPI_Finalize();
 
 	return (0);
 }
+
