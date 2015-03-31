@@ -16,10 +16,13 @@
 //
 //    Changelog:
 //    03/31/15 - License revision
+//             - Added fprint_intvector function
 //
 
 #include <print.h>
 #include <stdio.h>
+#include <errno.h>
+#include <debug.h>
 
 void
 print_time (struct timeval init, struct timeval end)
@@ -43,5 +46,27 @@ print_time (struct timeval init, struct timeval end)
 	}
 
 	printf("Elasped Time: %ds:%dms:%dus\n", secs, msecs, usecs);
+}
+
+int
+fprint_intvector (FILE *stream, const int *buf, size_t size)
+{
+	int i;
+	int ret;
+
+	if (!stream) {
+		return (-1);
+	}
+	if (!buf) {
+		return (-1);
+	}
+
+	for (i = 0; i < size; i++) {
+		if ((ret = fprintf(stream, "%d\n", buf[i])) < 0) {
+			return (ret);
+		}
+	}
+
+	return (0);
 }
 
