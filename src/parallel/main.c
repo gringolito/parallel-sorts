@@ -52,6 +52,7 @@ do_first_stage (const char *file, int jobs, size_t size)
 {
 	int i;
 	int ret;
+	int val;
 	int *readv;
 	int *sortv;
 	size_t slice;
@@ -60,16 +61,16 @@ do_first_stage (const char *file, int jobs, size_t size)
 	FILE *fd;
 	MPI_Status status;
 
-	fd = fopen(argv[1], "r");
+	fd = fopen(file, "r");
 	if (!fd) {
 		print_errno("fopen() failed!");
-		exit(ret);
+		exit(1);
 	}
 
 	slice = size / jobs;
 	readv = calloc(size, sizeof(*readv));
 	sortv = calloc(slice, sizeof(*sortv));
-	for (i = 0; i < size; i++) {
+	for (i = 0; (size_t) i < size; i++) {
 		ret = fscanf(fd, "%d", &readv[i]);
 		if (ret < 0) {
 			print_errno("fscanf() failed!");
@@ -82,25 +83,33 @@ do_first_stage (const char *file, int jobs, size_t size)
 
 	// To fill the sorted vector, just do a sequential insertion sort
 	// algorithm for the firsts `SLICE` elements
-	insertion_sortv(readv, sortv, slice)
+	insertion_sortv(readv, sortv, slice);
 
 	// Now we need to analize the values and forward to pipeline
-	for (i = slice; i < size; i++) {
+	for (i = slice; (size_t) i < size; i++) {
 		val = readv[i];
+		print_debug("i=%d val=%d", i, val);
 		insertion_sort(sortv, slice, &val);
+		print_debug("ret val=%d", val);
 		MPI_Send(&val, 1, MPI_INT, 1, MPI_TAG, MPI_COMM_WORLD);
 	}
 
 	// Wait for the last pipeline stage done their job
-	MPI_Recv(&val, 1, MPI_INT, jobs, MPI_TAG, MPI_COMM_WORLD, &status);
+	MPI_Recv(&val, 1, MPI_INT, jobs - 1, MPI_TAG, MPI_COMM_WORLD, &status);
 
 	gettimeofday(&end, NULL);
 
 	print_time(begin, end);
-	SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
+//	SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
+	for (i = 0; i < slice; i++) {
+		print_debug("stage=0 buf[%d]=%d", i, sortv[i]);
+	}
+	sleep(1);
 
 	val = MPI_TERMINATE;
-	MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	MPI_Send(&val, 1, MPI_INT, 1, MPI_TAG, MPI_COMM_WORLD);
+
+	printf("The result can be found at file '%s'\n", FILENAME);
 
 	free(readv);
 	free(sortv);
@@ -125,18 +134,19 @@ do_pipeline (int stage, int jobs, size_t size)
 	size_t elements;
 	MPI_Status status;
 
-	if (stage != jobs) {
+	if (stage != jobs - 1) {
 		slice = size / jobs;
 		elements = size - slice * stage;
 		next = stage + 1;
 	} else {
 		// Last stage of pipeline takes the rest of elements
-		slice = size % jobs;
+		slice = (size / jobs) + (size % jobs);
 		elements = slice;
 		next = 0;
 	}
 
 	prev = stage - 1;
+	print_debug("stage=%d slice=%zu elements=%zu next=%d prev=%d", stage, slice, elements, next, prev);
 
 	buf = calloc(slice, sizeof(*buf));
 
@@ -144,27 +154,37 @@ do_pipeline (int stage, int jobs, size_t size)
 	while (recv < elements) {
 		MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD,
 		    &status);
-		recv++;
+		print_debug("recv=%d val=%d", recv, val);
 		if (recv < slice) {
 			// While the vector isn't filled, just do a
 			// regular insertion sort
 			insertion_sort(buf, recv, &val);
+			print_debug("buf[%d]=%d val=%d", recv, buf[recv], val);
 		} else {
 			// Now we need to forward to pipeline
 			insertion_sort(buf, slice, &val);
+			print_debug("buf[%d]=%d val=%d", slice, buf[slice], val);
 			MPI_Send(&val, 1, MPI_INT, next, MPI_TAG,
 			    MPI_COMM_WORLD);
 		}
+		recv++;
 	}
-
-	val = MPI_TERMINATE;
-	MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	if (!next) {
+		val = MPI_TERMINATE;
+		MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	}
 	MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD, &status);
 
-	SAVE_RESULTS(RESULTS_APPEND, sortv, slice);
-
-	recv = MPI_TERMINATE;
-	MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+//	SAVE_RESULTS(RESULTS_APPEND, buf, slice);
+	int i;
+	for (i = 0; i < slice; i++) {
+		print_debug("stage=%d buf[%d]=%d", stage, i, buf[i]);
+	}
+	sleep(1);
+	if (next) {
+		val = MPI_TERMINATE;
+		MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	}
 
 	free(buf);
 }
@@ -186,7 +206,7 @@ main (int argc, const char **argv)
 	size = (size_t) atoi(argv[2]);
 	if (size < 1 || size > MAX_ELEM) {
 		print_error("Invalid number of elements: %zu!", size);
-		exit (1);
+		exit(1);
 	}
 
 	MPI_Init(&argc, (char ***) &argv);
@@ -194,14 +214,12 @@ main (int argc, const char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &jobs);
 
 	if (!id) {
-		do_first_stage(argv[1], size, jobs);
+		do_first_stage(argv[1], jobs, size);
 	} else {
-		do_pipeline(id, size, jobs);
+		do_pipeline(id, jobs, size);
 	}
 
 	MPI_Finalize();
-
-	printf("The result can be found at file '%s'\n", FILENAME);
 
 	return (0);
 }

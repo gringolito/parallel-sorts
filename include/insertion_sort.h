@@ -43,6 +43,7 @@ insertion_sort (int *buf, size_t size, int *val)
 			*val = tmp;
 		}
 	}
+	buf[i] = *val;
 }
 
 /**
@@ -61,7 +62,6 @@ insertion_sortv (const int *messy, int *sorted, size_t size)
 	for (i = 0; i < size; i++) {
 		val = messy[i];
 		insertion_sort(sorted, i, &val);
-		sorted[i] = val;
 	}
 }
 
