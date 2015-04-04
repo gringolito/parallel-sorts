@@ -26,7 +26,8 @@
 #include <utils.h>
 #include <insertion_sort.h>
 
-#define MAX_ELEM                                    (100000)
+#define MAX_ELEM                       (100000)
+#define FILENAME                       "sorted_vector.txt"
 
 void
 print_usage (void)
@@ -41,9 +42,9 @@ main (int argc, const char **argv)
 {
 	int i;
 	int ret;
-	int size;
 	int *readv;
 	int *sortv;
+	size_t size;
 	struct timeval begin;
 	struct timeval end;
 	FILE *fd;
@@ -55,9 +56,9 @@ main (int argc, const char **argv)
 		exit(1);
 	}
 
-	size = atoi(argv[2]);
+	size = (size_t) atoi(argv[2]);
 	if (size < 1 || size > MAX_ELEM) {
-		print_error("Invalid number of elements: %d!", size);
+		print_error("Invalid number of elements: %zu!", size);
 		exit(1);
 	}
 
@@ -69,7 +70,7 @@ main (int argc, const char **argv)
 
 	readv = calloc(size, sizeof(*readv));
 	sortv = calloc(size, sizeof(*sortv));
-	for (i = 0; i < size; i++) {
+	for (i = 0; (size_t) i < size; i++) {
 		ret = fscanf(fd, "%d", &readv[i]);
 		if (ret < 0) {
 			print_errno("fscanf() failed!");
@@ -79,23 +80,14 @@ main (int argc, const char **argv)
 	fclose(fd);
 
 	gettimeofday(&begin, NULL);
-	insertion_sort(readv, sortv, size);
+	insertion_sortv(readv, sortv, size);
 	gettimeofday(&end, NULL);
 
 	print_time(begin, end);
 
-	fd = fopen("sorted_vector.txt", "w");
-	if (!fd) {
-		print_errno("fopen() failed!");
-		exit(1);
-	}
+	SAVE_RESULTS(RESULTS_WRITE, sortv, size);
 
-	for (i = 0; i < size; i++) {
-		fprintf(fd, "%d\n", sortv[i]);
-	}
-	fflush(fd);
-	fclose(fd);
-	printf("The result can be found at file 'sorted_vector.txt'\n");
+	printf("The result can be found at file '%s'\n", FILENAME);
 
 	free(readv);
 	free(sortv);

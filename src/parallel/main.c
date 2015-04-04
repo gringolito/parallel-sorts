@@ -6,13 +6,14 @@
 // day, and you think this stuff is worth it, you can buy me a beer in
 // return.
 //
-// Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/19/15.
+// Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/26/15.
 //
 // The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 // "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in
 // this document are to be interpreted as described in RFC 2119.
 //
-// Main example file
+// Yet another sort app using Insertion Sort algorithm
+// (Parallel MPI implementation)
 //
 
 #include <stdio.h>
@@ -39,50 +40,21 @@ print_usage (void)
 	printf("\tSIZE Size of vector (Maximum size: %d)\n", MAX_ELEM);
 }
 
-/* Função que compara, armazena e envia (se for o caso) valores no vetor*/
-void
-compara (int id, int *valor, int vector[], int step, int tam)
-{
-	int flag = 0, // variável para indicar que houve inserção no vetor
-	    aux, // variável auxiliar para receber valor do vetor
-	    j, // utilizado nos loops
-	    tag = 0, // utilizado na comunicação MPI
-	    ultimo; // variável que armazena último valor do vetor
-	if (step < tam){ // caso ainda não tenha preenchido todas as posições do vetor
-		for (j = 0; j < step; j++) { // percorre até onde ele recebeu
-			if (*valor < vector[j]){ // algoritmo pipeline
-				aux = vector[j];
-				vector[j] = *valor;
-				*valor = aux;
-			}
-		}
-		vector[step] = *valor;
-	}
-	else { // caso já tenha preenchido todas as posições do vetor, testando a necessidade de inseri-lo
-		ultimo = vector[tam-1]; // obtém a última posição do vetor para o caso de houver troca
-		for (j = 0; j < tam; j++) { // algoritmo pipeline
-			if (*valor < vector[j]){
-				flag = 1; // houve inserção de valores
-				aux = vector[j];
-				vector[j] = *valor;
-				*valor = aux;
-			}
-		}
-		if (flag == 1) // caso houve inserção
-			MPI_Send(&ultimo,1,MPI_INT,id+1,tag,MPI_COMM_WORLD); // manda a variável ultimo para o próximo, que contém a última posição
-		else // caso não houve inserção
-			MPI_Send(valor,1,MPI_INT,id+1,tag,MPI_COMM_WORLD);  // manda o valor lido para o próximo           
-	}
-}
-
+/**
+ * @brief First stage of pipeline architecture of MPI.
+ *
+ * @param file filename of messy vector
+ * @param jobs number of pipeline stages
+ * @param size size of vector
+ */
 static void
-do_first_stage (const char *file, size_t size, int jobs)
+do_first_stage (const char *file, int jobs, size_t size)
 {
 	int i;
 	int ret;
-	int slice;
 	int *readv;
 	int *sortv;
+	size_t slice;
 	struct timeval begin;
 	struct timeval end;
 	FILE *fd;
@@ -96,7 +68,7 @@ do_first_stage (const char *file, size_t size, int jobs)
 
 	slice = size / jobs;
 	readv = calloc(size, sizeof(*readv));
-	sortv = calloc(slice + 1, sizeof(*sortv));
+	sortv = calloc(slice, sizeof(*sortv));
 	for (i = 0; i < size; i++) {
 		ret = fscanf(fd, "%d", &readv[i]);
 		if (ret < 0) {
@@ -106,30 +78,57 @@ do_first_stage (const char *file, size_t size, int jobs)
 	}
 	fclose(fd);
 
-	gettimeofday(&begin);
+	gettimeofday(&begin, NULL);
 
-	valor = temp[j];
-	Compara(rank, &valor, vector, j, tam);
-	// envia para o próximo que pode terminar
-	MPI_Send(&end, 1, MPI_INT, rank+1, tag, MPI_COMM_WORLD);
+	// To fill the sorted vector, just do a sequential insertion sort
+	// algorithm for the firsts `SLICE` elements
+	insertion_sortv(readv, sortv, slice)
+
+	// Now we need to analize the values and forward to pipeline
+	for (i = slice; i < size; i++) {
+		val = readv[i];
+		insertion_sort(sortv, slice, &val);
+		MPI_Send(&val, 1, MPI_INT, 1, MPI_TAG, MPI_COMM_WORLD);
+	}
+
+	// Wait for the last pipeline stage done their job
+	MPI_Recv(&val, 1, MPI_INT, jobs, MPI_TAG, MPI_COMM_WORLD, &status);
+
+	gettimeofday(&end, NULL);
+
+	print_time(begin, end);
+	SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
+
+	val = MPI_TERMINATE;
+	MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+
+	free(readv);
+	free(sortv);
 }
 
+/**
+ * @brief Another stages of pipeline architecture of MPI.
+ *
+ * @param stage pipeline stage identifier
+ * @param jobs number of pipeline stages
+ * @param size size of vector
+ */
 static void
-do_pipeline (int id, size_t size, int jobs)
+do_pipeline (int stage, int jobs, size_t size)
 {
-	int slice;
-	int elements;
-	int recv;
-	int last;
+	int val;
+	int prev;
 	int next;
 	int *buf;
-	FILE fd;
+	size_t recv;
+	size_t slice;
+	size_t elements;
 	MPI_Status status;
 
-	if (id != jobs) {
+	if (stage != jobs) {
 		slice = size / jobs;
-		elements = size - slice * id;
-		last = id - 1;
+		elements = size - slice * stage;
+		next = stage + 1;
 	} else {
 		// Last stage of pipeline takes the rest of elements
 		slice = size % jobs;
@@ -137,50 +136,38 @@ do_pipeline (int id, size_t size, int jobs)
 		next = 0;
 	}
 
-	buf = calloc(slice + 1, sizeof(*buf));
-	
-	while (elements--) {
-		MPI_Recv(&recv, 1, MPI_INT, last, MPI_TAG, MPI_COMM_WORLD,
+	prev = stage - 1;
+
+	buf = calloc(slice, sizeof(*buf));
+
+	recv = 0;
+	while (recv < elements) {
+		MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD,
 		    &status);
-		Compara(id, &recv, buf, j, tam);
+		recv++;
+		if (recv < slice) {
+			// While the vector isn't filled, just do a
+			// regular insertion sort
+			insertion_sort(buf, recv, &val);
+		} else {
+			// Now we need to forward to pipeline
+			insertion_sort(buf, slice, &val);
+			MPI_Send(&val, 1, MPI_INT, next, MPI_TAG,
+			    MPI_COMM_WORLD);
+		}
 	}
+
+	val = MPI_TERMINATE;
+	MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD, &status);
+
+	SAVE_RESULTS(RESULTS_APPEND, sortv, slice);
 
 	recv = MPI_TERMINATE;
-	MPI_Send(&recv, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
-	MPI_Recv(&recv, 1, MPI_INT, last, MPI_TAG, MPI_COMM_WORLD, &status);
+	MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
 
-	fd = fopen(FILENAME, "a+");
-	if (!fd) {
-		print_errno("fopen() failed!");
-		exit(1);
-	}
-	if (fprint_intvector(fd, buf, slice)) {
-		print_error("fprint_intvector() failed!");
-	}
-	fflush(fd);
-	fclose(fd);
-
-	recv = MPI_TERMINATE;
-	MPI_Send(&recv, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	free(buf);
 }
-
-#if 0
-	int array = atoi(argv[1]); // array será o tamanho de elementos a ordenar
-	if (array < 1)
-		return (1);
-	FILE *fp;
-	int vector[array]; // vetor que vai ser o ordenado e utilizado pelas etapas
-	int temp[array];
-	int rank, // "id" de cada processador
-	    np, // número de processadores
-	    j, // utilizado nos loops
-	    valor, // valor lido pela etapa 0
-	    tag = 0, // utilizado na comunicação MPI
-	    end = -1, // determina que etapa 0 leu todos os valores
-	    imprime = 1; // pode imprimir (sem valor lógico, apenas demonstrativo)
-	struct timeval ti, tf; // para imprimir tempo
-	int tam = array / np; // é a variável que dirá o tamanho de cada etapa
-#endif
 
 int
 main (int argc, const char **argv)
@@ -198,7 +185,7 @@ main (int argc, const char **argv)
 
 	size = (size_t) atoi(argv[2]);
 	if (size < 1 || size > MAX_ELEM) {
-		print_error("Invalid number of elements: %d!", size);
+		print_error("Invalid number of elements: %zu!", size);
 		exit (1);
 	}
 
@@ -213,6 +200,8 @@ main (int argc, const char **argv)
 	}
 
 	MPI_Finalize();
+
+	printf("The result can be found at file '%s'\n", FILENAME);
 
 	return (0);
 }

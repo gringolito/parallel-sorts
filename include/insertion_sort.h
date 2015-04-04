@@ -21,22 +21,47 @@
 #include <stdlib.h>
 #include <debug.h>
 
+/**
+ * @brief Insert an element in a vector using insertion sort algorithm, and
+ *        return the last element of vector.
+ *
+ * @param buf vector buffer
+ * @param size number of elements of vector
+ * @param val[in] value to be inserted
+ * @param val[out] value of the last element of vector
+ */
 static inline void
-insertion_sort (int *fuzzy, int *sort, int size)
+insertion_sort (int *buf, size_t size, int *val)
 {
-	int i;
-	int j;
+	size_t i;
 	int tmp;
 
 	for (i = 0; i < size; i++) {
-		for (j = 0; j < i; j++) {
-			if (fuzzy[i] < sort[j]) {
-				tmp = sort[j];
-				sort[j] = fuzzy[i];
-				fuzzy[i] = tmp;
-			}
+		if (*val < buf[i]) {
+			tmp = buf[i];
+			buf[i] = *val;
+			*val = tmp;
 		}
-		sort[i] = fuzzy[i];
+	}
+}
+
+/**
+ * @brief Sort an entire vector using insertion sort algorithm.
+ *
+ * @param messy vector to be sorted
+ * @param sorted sorted vector
+ * @param size number of elements of vectors
+ */
+static inline void
+insertion_sortv (const int *messy, int *sorted, size_t size)
+{
+	size_t i;
+	int val;
+
+	for (i = 0; i < size; i++) {
+		val = messy[i];
+		insertion_sort(sorted, i, &val);
+		sorted[i] = val;
 	}
 }
 
