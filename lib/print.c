@@ -20,7 +20,6 @@
 //
 
 #include <print.h>
-#include <stdio.h>
 #include <errno.h>
 #include <debug.h>
 
@@ -49,9 +48,9 @@ print_time (struct timeval init, struct timeval end)
 }
 
 int
-fprint_intvector (FILE *stream, const int *buf, size_t size)
+fprinti_vector (FILE *stream, const int *buf, size_t size)
 {
-	int i;
+	size_t i;
 	int ret;
 
 	if (!stream) {

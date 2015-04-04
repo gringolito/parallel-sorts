@@ -16,6 +16,7 @@
 //
 //    Changelog:
 //    03/31/15 - License revision
+//    04/03/15 - Added result saving macros
 //
 
 #ifndef __FUTZIG_UTILS_H
@@ -25,21 +26,37 @@
 #include <print.h>
 
 #ifndef PROG_NAME
-#define PROG_NAME             (prgname)
+#define PROG_NAME                      (prgname)
 #endif
 static const char *prgname;
 
 #ifndef EVER
-#define EVER                  (;;)
+#define EVER                           (;;)
 #endif
 
 #ifndef MIN
-#define MIN(a,b)              ((a < b) ? (a) : (b))
+#define MIN(a,b)                       ((a < b) ? (a) : (b))
 #endif
 
 #ifndef MAX
-#define MAX(a,b)              ((a > b) ? (a) : (b))
+#define MAX(a,b)                       ((a > b) ? (a) : (b))
 #endif
+
+#define RESULTS_WRITE                  (0)
+#define RESULTS_APPEND                 (1)
+#define SAVE_RESULTS(a, b, c)          do {                             \
+		FILE *_fd;                                              \
+		_fd = fopen(FILENAME, (a == RESULTS_WRITE) ? "w" : "a+");\
+		if (!_fd) {                                             \
+			print_errno("fopen() failed!");                 \
+			exit(1);                                        \
+		}                                                       \
+		if (fprinti_vector(_fd, b, c)) {                        \
+			print_error("fprinti_vector() failed!");        \
+		}                                                       \
+		fflush(_fd);                                            \
+		fclose(_fd);                                            \
+	} while(0)
 
 #endif //__FUTZIG_UTILS_H
 

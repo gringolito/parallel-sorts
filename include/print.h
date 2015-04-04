@@ -23,6 +23,7 @@
 #define __FUTZIG_PRINT_H
 
 #include <sys/time.h>
+#include <stdio.h>
 
 /**
  * @brief Calculate and write on stdout the difference betwen given
@@ -45,7 +46,7 @@ void print_time (struct timeval init, struct timeval end);
  * @retval 0, on success
  * @retval a negative number on fail
  */
-int fprint_intvector (FILE *stream, const int *buf, size_t size);
+int fprinti_vector (FILE *stream, const int *buf, size_t size);
 
 #endif // __FUTZIG_PRINT_H
 
