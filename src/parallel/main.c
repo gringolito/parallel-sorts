@@ -68,6 +68,7 @@ do_first_stage (const char *file, int jobs, size_t size)
 	}
 
 	slice = size / jobs;
+	print_debug("slice=%zu elements=%zu jobs=%d", slice, size, jobs);
 	readv = calloc(size, sizeof(*readv));
 	sortv = calloc(slice, sizeof(*sortv));
 	for (i = 0; (size_t) i < size; i++) {
@@ -88,9 +89,7 @@ do_first_stage (const char *file, int jobs, size_t size)
 	// Now we need to analize the values and forward to pipeline
 	for (i = slice; (size_t) i < size; i++) {
 		val = readv[i];
-		print_debug("i=%d val=%d", i, val);
 		insertion_sort(sortv, slice, &val);
-		print_debug("ret val=%d", val);
 		MPI_Send(&val, 1, MPI_INT, 1, MPI_TAG, MPI_COMM_WORLD);
 	}
 
@@ -100,11 +99,7 @@ do_first_stage (const char *file, int jobs, size_t size)
 	gettimeofday(&end, NULL);
 
 	print_time(begin, end);
-//	SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
-	for (i = 0; i < slice; i++) {
-		print_debug("stage=0 buf[%d]=%d", i, sortv[i]);
-	}
-	sleep(1);
+	SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
 
 	val = MPI_TERMINATE;
 	MPI_Send(&val, 1, MPI_INT, 1, MPI_TAG, MPI_COMM_WORLD);
@@ -146,7 +141,8 @@ do_pipeline (int stage, int jobs, size_t size)
 	}
 
 	prev = stage - 1;
-	print_debug("stage=%d slice=%zu elements=%zu next=%d prev=%d", stage, slice, elements, next, prev);
+	print_debug("stage=%d slice=%zu elements=%zu next=%d prev=%d",
+	    stage, slice, elements, next, prev);
 
 	buf = calloc(slice, sizeof(*buf));
 
@@ -154,20 +150,18 @@ do_pipeline (int stage, int jobs, size_t size)
 	while (recv < elements) {
 		MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD,
 		    &status);
-		print_debug("recv=%d val=%d", recv, val);
-		if (recv < slice) {
+		print_debug("stage=%d recv=%zu val=%d", stage, recv, val);
+		recv++;
+		if (recv <= slice) {
 			// While the vector isn't filled, just do a
 			// regular insertion sort
-			insertion_sort(buf, recv, &val);
-			print_debug("buf[%d]=%d val=%d", recv, buf[recv], val);
+			insert_sorted(buf, recv, val);
 		} else {
 			// Now we need to forward to pipeline
 			insertion_sort(buf, slice, &val);
-			print_debug("buf[%d]=%d val=%d", slice, buf[slice], val);
 			MPI_Send(&val, 1, MPI_INT, next, MPI_TAG,
 			    MPI_COMM_WORLD);
 		}
-		recv++;
 	}
 	if (!next) {
 		val = MPI_TERMINATE;
@@ -175,12 +169,8 @@ do_pipeline (int stage, int jobs, size_t size)
 	}
 	MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD, &status);
 
-//	SAVE_RESULTS(RESULTS_APPEND, buf, slice);
-	int i;
-	for (i = 0; i < slice; i++) {
-		print_debug("stage=%d buf[%d]=%d", stage, i, buf[i]);
-	}
-	sleep(1);
+	SAVE_RESULTS(RESULTS_APPEND, buf, slice);
+
 	if (next) {
 		val = MPI_TERMINATE;
 		MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);

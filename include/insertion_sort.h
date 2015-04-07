@@ -27,8 +27,8 @@
  *
  * @param buf vector buffer
  * @param size number of elements of vector
- * @param val[in] value to be inserted
- * @param val[out] value of the last element of vector
+ * @param val[in] element to be inserted
+ * @param val[out] last element of vector
  */
 static inline void
 insertion_sort (int *buf, size_t size, int *val)
@@ -43,7 +43,6 @@ insertion_sort (int *buf, size_t size, int *val)
 			*val = tmp;
 		}
 	}
-	buf[i] = *val;
 }
 
 /**
@@ -62,7 +61,23 @@ insertion_sortv (const int *messy, int *sorted, size_t size)
 	for (i = 0; i < size; i++) {
 		val = messy[i];
 		insertion_sort(sorted, i, &val);
+		sorted[i] = val;
 	}
+}
+
+/**
+ * @brief Insert an element in a vector (sorted)
+ *
+ * @param buf vector buffer
+ * @param size number of elementes of buf
+ * @param val element to be inserted
+ */
+static inline void
+insert_sorted (int *buf, size_t size, int val)
+
+{
+	insertion_sort(buf, size, &val);
+	buf[size-1] = val;
 }
 
 #endif //__FUTZIG_INSERTION_SORT_H

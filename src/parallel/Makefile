@@ -15,7 +15,7 @@ CC=mpicc
 CFLAGS=-Wall -Wextra -std=c99 -pipe -O3 -J5 -march=native
 LDFLAGS=
 EXTRA_CFLAGS=-DPROG_NAME=\"$(TARGET)\"
-DEBUG=yes
+DEBUG=no
 LIB_PATH=../../lib
 LIB_SRC=$(wildcard $(LIB_PATH)/*.c)
 LIBS=$(LIB_SRC:.c=.o)
