@@ -15,38 +15,54 @@
 #
 # Script to automize parallel and sequential test execution
 #
+
+# Script vars
+LOG_DIR=var/log
+LOG_ERR=error.log
+STATS_FILE=stats.log
+STATS_BIN=var/confidence.py
+
+# Programs vars
 SEQ_BIN=bin/sequential
 PAR_BIN=bin/parallel
-LOG_DIR=var/log
 MPI_BIN=mpirun
 MPI_ARGS=-n
+
+# Execution vars
 VECTOR=var/vetor.txt
-ELEMENTS=$(seq 50000 25000 100000)
-EXECUTIONS=$(seq 1 29)
-PROCESSORS=$(seq 2 4)
+EXECS=$(seq 1 29)
+PROCESSORS="2 4 8"
+ELEMENTS="50000 75000 100000"
+
 
 print_usage() {
 	echo -e "Usage: $0 OPTION"
 	echo -e "\nOptions:"
-	echo -e "\t-lad\tLAD environment setup"
-	echo -e "\t-linux\tGeneric Linux environment setup (default)"
+	echo -e "\t--lad\tLAD environment setup"
+	echo -e "\t--linux\tGeneric Linux environment setup (default)"
+	echo -e "\t--help\tPrint this help message"
 	exit 0
 }
 
-if [ ! -x $SEQUENTIAL ]; then
-	echo -e "Invalid non-executable file $1"
+print_end() {
+	echo -e "Errors can be found at $LOG_ERR"
+	exit $1
+}
+
+if [ ! -x $SEQ_BIN ]; then
+	echo -e "Invalid non-executable file $SEQ_BIN"
 	exit 1
 fi
-if [ ! -x $PARALLEL ]; then
-	echo -e "Invalid non-executable file $2"
+if [ ! -x $PAR_BIN ]; then
+	echo -e "Invalid non-executable file $PAR_BIN"
 	exit 1
 fi
 
-if [ "$1" == "--help" ]; then
+if [ "$1" != "--lad" && "$1" != "--linux" ]; then
 	print_usage
 fi
 
-if [ "$1" == "-lad" ]; then
+if [ "$1" == "--lad" ]; then
 	MPI_BIN=ladrun
 	MPI_ARGS=-np
 fi
@@ -55,11 +71,13 @@ if [ ! -d $LOG_DIR ]; then
 	mkdir $LOG_DIR
 fi
 
+# Redirecting STDERR to a log file
+exec 2 > $LOG_ERR
 ############################################################################
 # Sequential sampling
 for i in $ELEMENTS; do
 	LOG_FILE=$LOG_DIR/sequential_${i}.log
-	echo -e "" > $LOG_FILE
+	echo -e "#Sequential - $i elements" > $LOG_FILE
 	echo -ne "Running $SEQ_BIN with $i elements! Execution:  "
 	for e in $EXECUTIONS; do
 		if [ $e -gt 10 ]; then
@@ -69,18 +87,15 @@ for i in $ELEMENTS; do
 		$SEQ_BIN $VECTOR $i >> $LOG_FILE
 	done
 	echo -e ""
-	echo -e "\tResults can be found at $LOG_FILE"
+	echo -e "\tExecution logs can be found at $LOG_FILE"
 done
 
 # Parallel sampling
 for i in $ELEMENTS; do
-	LOG_FILE=$LOG_DIR/parallel_${i}.log
-	echo -e "" > $LOG_FILE
 	for p in $PROCESSORS; do
-		echo -e "###################" >> $LOG_FILE
-		echo -e "# $p Processors" >> $LOG_FILE
-		echo -e "###################" >> $LOG_FILE
-		echo -ne "Running $PAR_BIN with $p processors and $i elements! Execution:  "
+		LOG_FILE=$LOG_DIR/parallel_${p}_${i}.log
+		echo -e "#Parallel - $p processors - $i elements" > $LOG_FILE
+		echo -ne "Running $PAR_BIN - $p processors - $i elements! Execution:  "
 		for e in $EXECUTIONS; do
 			if [ $e -gt 10 ]; then
 				echo -ne "\b"
@@ -90,6 +105,22 @@ for i in $ELEMENTS; do
 		done
 		echo -e ""
 	done
-	echo -e "\tResults can be found at $LOG_FILE"
+	echo -e "\tExecutions logs can be found at $LOG_FILE"
 done
+
+SED_STR="s|.*: \([0-9]*\)s:\([0-9]*\)ms:\([0-9]*\)us|\1.\2|"
+echo -ne "Processing results"
+echo -ne "" > $STATS_FILE
+for file in $(ls $LOG_DIR); do
+	sed -i.res -e '/^The/d' -e "$SED_STR" $file
+	$STATS_BIN ${file}.res $STATS_FILE
+	RET=$?
+	if [ $RET -ne 0 ]; then
+		echo -e " [FAIL]"
+		print_end $RET
+	fi
+done
+echo -e " [DONE] ... Results can be found at $STATS_FILE"
+
+print_end 0
 
