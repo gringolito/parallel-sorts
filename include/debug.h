@@ -20,26 +20,26 @@
 #include <errno.h>
 
 #ifdef DEBUG
-#define print_debug(...)   do {                                   \
-		printf("[ DEBUG ] %s() %d:", __func__, __LINE__); \
-		printf(__VA_ARGS__);                              \
-		printf("\n");                                     \
+#define print_debug(...)   do {                                     \
+		printf("[ DEBUG ] %s():%d - ", __func__, __LINE__); \
+		printf(__VA_ARGS__);                                \
+		printf("\n");                                       \
 	} while (0)
 #else
 	#define print_debug(...)
 #endif
 
-#define print_error(...)   do {                                            \
-		fprintf(stderr, "[ ERROR ] %s() %d:", __func__, __LINE__); \
-		fprintf(stderr, __VA_ARGS__);                              \
-		fprintf(stderr, "\n");                                     \
+#define print_error(...)   do {                                              \
+		fprintf(stderr, "[ ERROR ] %s():%d - ", __func__, __LINE__); \
+		fprintf(stderr, __VA_ARGS__);                                \
+		fprintf(stderr, "\n");                                       \
 	} while (0)
 
-#define print_errno(...)   do {                                            \
-		int __err = errno;                                         \
-		fprintf(stderr, "[ ERROR ] %s() %d:", __func__, __LINE__); \
-		fprintf(stderr, __VA_ARGS__);                              \
-		fprintf(stderr, ": %s\n", strerror(__err));                \
+#define print_errno(...)   do {                                              \
+		int __err = errno;                                           \
+		fprintf(stderr, "[ ERROR ] %s():%d - ", __func__, __LINE__); \
+		fprintf(stderr, __VA_ARGS__);                                \
+		fprintf(stderr, ": %s\n", strerror(__err));                  \
 	} while (0)
 
 #endif // __FUTZIG_DEBUG_H
