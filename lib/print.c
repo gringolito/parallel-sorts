@@ -1,6 +1,10 @@
 // print.c
 //
-// Copyright (c) 2015 Filipe Utzig. All rights reserved.
+// "THE BEER-WARE LICENSE" (Revision 42):
+// <filipeutzig@gmail.com> wrote this file. As long as you retain this
+// notice you can do whatever you want with this stuff. If we meet some
+// day, and you think this stuff is worth it, you can buy me a beer in
+// return.
 //
 // Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/19/15.
 //
@@ -10,9 +14,14 @@
 //
 // Some useful print functions
 //
+//    Changelog:
+//    03/31/15 - License revision
+//             - Added fprint_intvector function
+//
 
 #include <print.h>
-#include <stdio.h>
+#include <errno.h>
+#include <debug.h>
 
 void
 print_time (struct timeval init, struct timeval end)
@@ -36,5 +45,27 @@ print_time (struct timeval init, struct timeval end)
 	}
 
 	printf("Elasped Time: %ds:%dms:%dus\n", secs, msecs, usecs);
+}
+
+int
+fprinti_vector (FILE *stream, const int *buf, size_t size)
+{
+	size_t i;
+	int ret;
+
+	if (!stream) {
+		return (-1);
+	}
+	if (!buf) {
+		return (-1);
+	}
+
+	for (i = 0; i < size; i++) {
+		if ((ret = fprintf(stream, "%d\n", buf[i])) < 0) {
+			return (ret);
+		}
+	}
+
+	return (0);
 }
 

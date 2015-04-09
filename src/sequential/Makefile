@@ -1,13 +1,18 @@
 #***********************************************************************
 #
-#  Copyright (c) 2015 Filipe Utzig <filipeutzig@gmail.com>
-#  All Rights Reserved
+#  "THE BEER-WARE LICENSE" (Revision 42):
+#  <filipeutzig@gmail.com> wrote this file. As long as you retain this
+#  notice you can do whatever you want with this stuff. If we meet some
+#  day, and you think this stuff is worth it, you can buy me a beer in
+#  return.
+#
+#  Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/24/15.
 #
 #***********************************************************************
 
 CC=gcc
 #CFLAGS=-Wall -Wextra -std=c99 -pipe -Og -g3
-CFLAGS=-Wall -Wextra -std=c99 -pipe -O3 -J3 -march=native
+CFLAGS=-Wall -Wextra -std=c99 -pipe -O3 -J5 -march=native
 LDFLAGS=
 EXTRA_CFLAGS=-DPROG_NAME=\"$(TARGET)\"
 DEBUG=no
@@ -31,26 +36,26 @@ ifeq (1,$(DEBUG))
 override EXTRA_CFLAGS += -DDEBUG
 endif
 
-.PHONY: all default install clean mrproper $(TARGET)
+.PHONY  : all default install clean mrproper $(TARGET)
 
-default:    clean $(TARGET)
+default : clean $(TARGET)
 
-all:        $(TARGET)
+all     : $(TARGET)
 
-$(TARGET):  $(OBJ)
+$(TARGET): $(OBJ)
 	@$(CC) $(OBJ) $(LDFLAGS) -o $@
 	@echo "[LD] $(OBJ) -> $@"
 
-%.o: %.c
+%.o     : %.c
 	@$(CC) -o $@ -c $< $(CFLAGS) $(EXTRA_CFLAGS) $(INC_PATH)
 	@echo "[CC] $<"
 
-install:    $(TARGET)
+install : $(TARGET)
 	@test -d $(PREFIX) || mkdir $(PREFIX)
 	@test -d $(PREFIX)/bin || mkdir $(PREFIX)/bin
 	@$(INSTALL) $(TARGET) $(PREFIX)/bin
 
-clean:
+clean   :
 	@$(RM) *.o *~ $(TARGET)
 
 mrproper: clean

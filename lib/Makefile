@@ -1,11 +1,15 @@
 #***********************************************************************
 #
-#  Copyright (c) 2015 Filipe Utzig <filipeutzig@gmail.com>
-#  All Rights Reserved
+#  "THE BEER-WARE LICENSE" (Revision 42):
+#  <filipeutzig@gmail.com> wrote this file. As long as you retain this
+#  notice you can do whatever you want with this stuff. If we meet some
+#  day, and you think this stuff is worth it, you can buy me a beer in
+#  return.
+#
+#  Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/19/15.
 #
 #***********************************************************************
 
-#CFLAGS=-Wall -Wextra -std=c99 -pipe -Og -g3
 CFLAGS=-Wall -Wextra -std=c99 -pipe -O2 -J3
 LDFLAGS=
 INC_PATH=-I../include
