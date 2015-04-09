@@ -30,7 +30,7 @@ MPI_ARGS=-n
 
 # Execution vars
 VECTOR=var/vetor.txt
-EXECS=$(seq 1 29)
+EXECUTIONS=$(seq 1 29)
 PROCESSORS="2 4 8"
 ELEMENTS="50000 75000 100000"
 
@@ -58,7 +58,7 @@ if [ ! -x $PAR_BIN ]; then
 	exit 1
 fi
 
-if [ "$1" != "--lad" && "$1" != "--linux" ]; then
+if [ "$1" != "--lad" ] && [ "$1" != "--linux" ]; then
 	print_usage
 fi
 
@@ -72,7 +72,7 @@ if [ ! -d $LOG_DIR ]; then
 fi
 
 # Redirecting STDERR to a log file
-exec 2 > $LOG_ERR
+exec 2>$LOG_ERR
 ############################################################################
 # Sequential sampling
 for i in $ELEMENTS; do
@@ -104,16 +104,17 @@ for i in $ELEMENTS; do
 			$MPI_BIN $MPI_ARGS $p $PAR_BIN $VECTOR $i >> $LOG_FILE
 		done
 		echo -e ""
+		echo -e "\tExecutions logs can be found at $LOG_FILE"
 	done
-	echo -e "\tExecutions logs can be found at $LOG_FILE"
 done
 
 SED_STR="s|.*: \([0-9]*\)s:\([0-9]*\)ms:\([0-9]*\)us|\1.\2|"
 echo -ne "Processing results"
 echo -ne "" > $STATS_FILE
-for file in $(ls $LOG_DIR); do
-	sed -i.res -e '/^The/d' -e "$SED_STR" $file
-	$STATS_BIN ${file}.res $STATS_FILE
+FILES=$(ls $LOG_DIR)
+for file in $FILES; do
+	sed -i.bkp -e '/^The/d' -e "$SED_STR" $LOG_DIR/$file
+#	$STATS_BIN ${file}.res $STATS_FILE
 	RET=$?
 	if [ $RET -ne 0 ]; then
 		echo -e " [FAIL]"
