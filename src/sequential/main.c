@@ -6,13 +6,13 @@
 // day, and you think this stuff is worth it, you can buy me a beer in
 // return.
 //
-// Initial version by Filipe Utzig <filipeutzig@gmail.com> on 3/24/15.
+// Initial version by Filipe Utzig <filipeutzig@gmail.com> on 4/9/15.
 //
 // The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
 // "SHOULD", "SHOULD NOT", "RECOMMENDED", "MAY", and "OPTIONAL" in
 // this document are to be interpreted as described in RFC 2119.
 //
-// Yet another sort app using Insertion Sort algorithm
+// Yet another sort app using Merge Sort algorithm
 // (Sequential implementation)
 //
 
@@ -24,7 +24,7 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <utils.h>
-#include <insertion_sort.h>
+#include <merge_sort.h>
 
 #define MAX_ELEM                       (100000)
 #define FILENAME                       "sorted_vector.txt"
@@ -43,7 +43,6 @@ main (int argc, const char **argv)
 	int i;
 	int ret;
 	int *readv;
-	int *sortv;
 	size_t size;
 	struct timeval begin;
 	struct timeval end;
@@ -69,7 +68,6 @@ main (int argc, const char **argv)
 	}
 
 	readv = calloc(size, sizeof(*readv));
-	sortv = calloc(size, sizeof(*sortv));
 	for (i = 0; (size_t) i < size; i++) {
 		ret = fscanf(fd, "%d", &readv[i]);
 		if (ret < 0) {
@@ -80,17 +78,16 @@ main (int argc, const char **argv)
 	fclose(fd);
 
 	gettimeofday(&begin, NULL);
-	insertion_sortv(readv, sortv, size);
+	merge_sort(readv, 0, size);
 	gettimeofday(&end, NULL);
 
 	print_time(begin, end);
 
-	SAVE_RESULTS(RESULTS_WRITE, sortv, size);
+	SAVE_RESULTS(RESULTS_WRITE, readv, size);
 
 	printf("The result can be found at file '%s'\n", FILENAME);
 
 	free(readv);
-	free(sortv);
 
 	return (0);
 }
