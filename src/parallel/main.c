@@ -40,143 +40,54 @@ print_usage (void)
 	printf("\tSIZE Size of vector (Maximum size: %d)\n", MAX_ELEM);
 }
 
-/**
- * @brief First stage of pipeline architecture of MPI.
- *
- * @param file filename of messy vector
- * @param jobs number of pipeline stages
- * @param size size of vector
- */
-static void
-do_first_stage (const char *file, int jobs, size_t size)
+static int
+divide (void)
 {
-	int i;
-	int ret;
-	int val;
-	int *readv;
-	int *sortv;
-	size_t slice;
-	struct timeval begin;
-	struct timeval end;
-	FILE *fd;
-	MPI_Status status;
-
-	fd = fopen(file, "r");
-	if (!fd) {
-		print_errno("fopen() failed!");
-		exit(1);
+	// calcula o proximo
+	nlog = ntotal / send_size;
+	// divide o valor a enviar por dois (inicilizado com array)
+	send_size = send_size / 2;
+	// divide o vetor
+	for (i = 0, j = 0, k = send_size; i < send_size; i++, j++, k++) {
+		// parte mais baixa fica
+		received_vector[j] = vector[i];
+		// parte mais alta e enviada
+		send_vector[j] = vector[k];
 	}
-
-	slice = size / jobs;
-	print_debug("slice=%zu elements=%zu jobs=%d", slice, size, jobs);
-	readv = calloc(size, sizeof(*readv));
-	sortv = calloc(slice, sizeof(*sortv));
-	for (i = 0; (size_t) i < size; i++) {
-		ret = fscanf(fd, "%d", &readv[i]);
-		if (ret < 0) {
-			print_errno("fscanf() failed!");
-			exit(ret);
-		}
-	}
-	fclose(fd);
-
-	gettimeofday(&begin, NULL);
-
-	// To fill the sorted vector, just do a sequential insertion sort
-	// algorithm for the firsts `SLICE` elements
-	insertion_sortv(readv, sortv, slice);
-
-	// Now we need to analize the values and forward to pipeline
-	for (i = slice; (size_t) i < size; i++) {
-		val = readv[i];
-		insertion_sort(sortv, slice, &val);
-		MPI_Send(&val, 1, MPI_INT, 1, MPI_TAG, MPI_COMM_WORLD);
-	}
-
-	// Wait for the last pipeline stage done their job
-	MPI_Recv(&val, 1, MPI_INT, jobs - 1, MPI_TAG, MPI_COMM_WORLD, &status);
-
-	gettimeofday(&end, NULL);
-
-	print_time(begin, end);
-	SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
-
-	val = MPI_TERMINATE;
-	MPI_Send(&val, 1, MPI_INT, 1, MPI_TAG, MPI_COMM_WORLD);
-
-	printf("The result can be found at file '%s'\n", FILENAME);
-
-	free(readv);
-	free(sortv);
+	// calcula o proximo
+	next = log (nlog) / log (2);
+	next = (rank+(pow (2,next)));
+	MPI_Send(send_vector, send_size, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
 }
 
-/**
- * @brief Another stages of pipeline architecture of MPI.
- *
- * @param stage pipeline stage identifier
- * @param jobs number of pipeline stages
- * @param size size of vector
- */
-static void
-do_pipeline (int stage, int jobs, size_t size)
+	static int
+conquer (void)
 {
-	int val;
-	int prev;
-	int next;
-	int *buf;
-	size_t recv;
-	size_t slice;
-	size_t elements;
-	MPI_Status status;
-
-	if (stage != jobs - 1) {
-		slice = size / jobs;
-		elements = size - slice * stage;
-		next = stage + 1;
-	} else {
-		// Last stage of pipeline takes the rest of elements
-		slice = (size / jobs) + (size % jobs);
-		elements = slice;
-		next = 0;
+	// ordena sua parte do nodo 0
+	Sort(received_vector,0, send_size);
+	// enquanto não receber o numero de elementos do array original
+	while (send_size != array) {
+		// recebe dos filhos
+		MPI_Recv(send_vector, send_size, MPI_INT, MPI_ANY_SOURCE,
+		    tag, MPI_COMM_WORLD, &status);
+		MPI_Get_elements(&status, MPI_INT, &received_size);
+		old_size = send_size;
+		send_size = send_size + received_size;
+		// recebe as outras partes
+		for (i = received_size, j = 0; i < send_size; i++, j++)
+			received_vector[i] = send_vector[j];
+		Merge(received_vector, 0, old_size, send_size);
 	}
+}
 
-	prev = stage - 1;
-	print_debug("stage=%d slice=%zu elements=%zu next=%d prev=%d",
-	    stage, slice, elements, next, prev);
-
-	buf = calloc(slice, sizeof(*buf));
-
-	recv = 0;
-	while (recv < elements) {
-		MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD,
-		    &status);
-		print_debug("stage=%d recv=%zu val=%d", stage, recv, val);
-		recv++;
-		if (recv <= slice) {
-			// While the vector isn't filled, just do a
-			// regular insertion sort
-			insert_sorted(buf, recv, val);
-		} else {
-			// Now we need to forward to pipeline
-			insertion_sort(buf, slice, &val);
-			MPI_Send(&val, 1, MPI_INT, next, MPI_TAG,
-			    MPI_COMM_WORLD);
-		}
+	static int
+divide_and_conquer (void)
+{
+	while (send_size != tam) {
+		divide();
 	}
-	if (!next) {
-		val = MPI_TERMINATE;
-		MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
-	}
-	MPI_Recv(&val, 1, MPI_INT, prev, MPI_TAG, MPI_COMM_WORLD, &status);
+	conquer();
 
-	SAVE_RESULTS(RESULTS_APPEND, buf, slice);
-
-	if (next) {
-		val = MPI_TERMINATE;
-		MPI_Send(&val, 1, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
-	}
-
-	free(buf);
 }
 
 int
@@ -203,11 +114,91 @@ main (int argc, const char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &id);
 	MPI_Comm_size(MPI_COMM_WORLD, &jobs);
 
+	int tam = array / np;
 	if (!id) {
-		do_first_stage(argv[1], jobs, size);
+		fd = fopen(file, "r");
+		if (!fd) {
+			print_errno("fopen() failed!");
+			exit(1);
+		}
+		slice = size / jobs;
+		print_debug("slice=%zu elements=%zu jobs=%d", slice, size, jobs);
+		readv = calloc(size, sizeof(*readv));
+		sortv = calloc(slice, sizeof(*sortv));
+		for (i = 0; (size_t) i < size; i++) {
+			ret = fscanf(fd, "%d", &readv[i]);
+			if (ret < 0) {
+				print_errno("fscanf() failed!");
+				exit(ret);
+			}
+		}
+		fclose(fd);
+
+		gettimeofday(&ti, NULL);
+		divide_and_conquer();
+		gettimeofday(&tf, NULL);
+		print_time(begin, end);
+		SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
 	} else {
-		do_pipeline(id, jobs, size);
+		MPI_Recv(received_vector, send_size, MPI_INT, MPI_ANY_SOURCE,
+		    tag, MPI_COMM_WORLD, &status);
+		MPI_Get_elements(&status, MPI_INT, &received_size);
+		received_from = status.MPI_SOURCE;
+		send_size = received_size;
+		original_size = received_size;
+		last_one = 1;
+		divide_and_conquer();
 	}
+
+
+
+
+
+
+
+		// enquanto o que foi enviado nao e tamanho final de cada processador
+		while(send_size != tam){
+			last_one = 0;
+			// calcula o proximo
+			nlog = ntotal / send_size;
+			send_size = send_size / 2;
+			for (i = 0, j = 0, k = send_size; i < send_size;
+			    i++, j++, k++)
+				// parte mais alta e enviada
+				send_vector[j] = received_vector[k];
+			// calcula o proximo
+			next = log (nlog) / log (2);
+			next = (rank+(pow (2,next)));
+			MPI_Send(send_vector, send_size, MPI_INT, next, tag,
+			    MPI_COMM_WORLD);
+		}
+		Sort(received_vector,0, send_size);
+		if (last_one == 1) {
+			MPI_Send(received_vector, received_size, MPI_INT,
+			    received_from, tag, MPI_COMM_WORLD);
+		} else {
+			while(send_size != original_size){
+				MPI_Recv(send_vector, send_size, MPI_INT,
+				    MPI_ANY_SOURCE, tag, MPI_COMM_WORLD, &status);
+				MPI_Get_elements(&status, MPI_INT, &received_size);
+				old_size = send_size;
+				send_size = send_size + received_size; 
+				send_one = received_size;
+				if (received_size == 1)
+					// incrementa send_one para não duplicar em i = 1
+					send_one++;
+				for (i = send_one, j = 0; i < send_size; i++, j++)
+					received_vector[i] = send_vector[j];
+				Merge(received_vector, 0, old_size, send_size);
+			}
+			MPI_Send(received_vector, original_size, MPI_INT,
+			    received_from, tag, MPI_COMM_WORLD);
+		}
+	}
+
+
+
+
 
 	MPI_Finalize();
 
