@@ -40,54 +40,63 @@ print_usage (void)
 	printf("\tSIZE Size of vector (Maximum size: %d)\n", MAX_ELEM);
 }
 
-static int
-divide (void)
+static inline void
+divide (int *recv, size_t recv_size, size_t send_size, int id)
 {
-	// calcula o proximo
+	int next;
+	int *sendv = &recv[recv_size - send_size];
+
+	// CHECK THIS CALCULE
 	nlog = ntotal / send_size;
-	// divide o valor a enviar por dois (inicilizado com array)
-	send_size = send_size / 2;
-	// divide o vetor
-	for (i = 0, j = 0, k = send_size; i < send_size; i++, j++, k++) {
-		// parte mais baixa fica
-		received_vector[j] = vector[i];
-		// parte mais alta e enviada
-		send_vector[j] = vector[k];
-	}
-	// calcula o proximo
 	next = log (nlog) / log (2);
 	next = (rank+(pow (2,next)));
-	MPI_Send(send_vector, send_size, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+
+	MPI_Send(sendv, send_size, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
 }
 
-	static int
-conquer (void)
+static inline void
+conquer (int *recv, size_t sent_size, size_t sort_size, int id);
 {
-	// ordena sua parte do nodo 0
-	Sort(received_vector,0, send_size);
-	// enquanto não receber o numero de elementos do array original
-	while (send_size != array) {
-		// recebe dos filhos
-		MPI_Recv(send_vector, send_size, MPI_INT, MPI_ANY_SOURCE,
-		    tag, MPI_COMM_WORLD, &status);
-		MPI_Get_elements(&status, MPI_INT, &received_size);
-		old_size = send_size;
-		send_size = send_size + received_size;
-		// recebe as outras partes
-		for (i = received_size, j = 0; i < send_size; i++, j++)
-			received_vector[i] = send_vector[j];
-		Merge(received_vector, 0, old_size, send_size);
+	int count;
+	size_t received = 0;
+	size_t ordered = sort_size;
+	MPI_Status status;
+
+	while (received != sent_size) {
+		MPI_Recv(&recv[ordered], sent_size, MPI_INT, MPI_ANY_SOURCE,
+		    MPI_TAG, MPI_COMM_WORLD, &status);
+		MPI_Get_elements(&status, MPI_INT, &count);
+		received += count;
+		merge_vector(recv, 0, ordered, received + sort_size);
+		ordered += count;
 	}
 }
 
-	static int
-divide_and_conquer (void)
+static inline void
+divide_and_conquer (int *recv, const size_t recv_size,
+    const size_t conquer_size, int id)
 {
-	while (send_size != tam) {
-		divide();
-	}
-	conquer();
+	int has_divided = 0;
+	int *sort;
+	size_t my_size = recv_size;
+	size_t send_size;
+	size_t sent = 0;
 
+	while (my_size > conquer_size) {
+		send_size = my_size / 2;
+		my_size -= send_size;
+		divide(recv, recv_size, send_size, id);
+		sent += send_size;
+		has_divided = 1;
+	}
+
+	merge_sort(recv, 0, my_size);
+
+	if (has_divided) {
+		conquer(recv, sent, my_size, id);
+	}
+
+	return (sortv);
 }
 
 int
@@ -95,7 +104,14 @@ main (int argc, const char **argv)
 {
 	int id;
 	int jobs;
+	int *readv;
+	int *sortv;
+	int *recv;
+	size_t i;
 	size_t size;
+	size_t recv_size;
+	size_t conquer_size;
+	MPI_Status status;
 
 	prgname = argv[0];
 
@@ -114,18 +130,18 @@ main (int argc, const char **argv)
 	MPI_Comm_rank(MPI_COMM_WORLD, &id);
 	MPI_Comm_size(MPI_COMM_WORLD, &jobs);
 
-	int tam = array / np;
+	readv = calloc(size, sizeof(*readv));
+	conquer_size = size / jobs;
+
 	if (!id) {
 		fd = fopen(file, "r");
 		if (!fd) {
 			print_errno("fopen() failed!");
 			exit(1);
 		}
-		slice = size / jobs;
-		print_debug("slice=%zu elements=%zu jobs=%d", slice, size, jobs);
-		readv = calloc(size, sizeof(*readv));
-		sortv = calloc(slice, sizeof(*sortv));
-		for (i = 0; (size_t) i < size; i++) {
+		print_debug("conquer=%zu elements=%zu jobs=%d", conquer_size,
+		    size, jobs);
+		for (i = 0; i < size; i++) {
 			ret = fscanf(fd, "%d", &readv[i]);
 			if (ret < 0) {
 				print_errno("fscanf() failed!");
@@ -135,72 +151,21 @@ main (int argc, const char **argv)
 		fclose(fd);
 
 		gettimeofday(&ti, NULL);
-		divide_and_conquer();
+		divide_and_conquer(readv, size, conquer_size, id);
 		gettimeofday(&tf, NULL);
 		print_time(begin, end);
-		SAVE_RESULTS(RESULTS_WRITE, sortv, slice);
+		SAVE_RESULTS(RESULTS_WRITE, readv, size);
 	} else {
-		MPI_Recv(received_vector, send_size, MPI_INT, MPI_ANY_SOURCE,
-		    tag, MPI_COMM_WORLD, &status);
-		MPI_Get_elements(&status, MPI_INT, &received_size);
-		received_from = status.MPI_SOURCE;
-		send_size = received_size;
-		original_size = received_size;
-		last_one = 1;
-		divide_and_conquer();
+		MPI_Recv(readv, size, MPI_INT, MPI_ANY_SOURCE, MPI_TAG,
+		    MPI_COMM_WORLD, &status);
+		MPI_Get_elements(&status, MPI_INT, &recv_size);
+		divide_and_conquer(readv, recv_size, conquer_size, id);
+		MPI_Send(readv, recv_size, MPI_INT, status.MPI_SOURCE,
+		    MPI_TAG, MPI_COMM_WORLD);
 	}
-
-
-
-
-
-
-
-		// enquanto o que foi enviado nao e tamanho final de cada processador
-		while(send_size != tam){
-			last_one = 0;
-			// calcula o proximo
-			nlog = ntotal / send_size;
-			send_size = send_size / 2;
-			for (i = 0, j = 0, k = send_size; i < send_size;
-			    i++, j++, k++)
-				// parte mais alta e enviada
-				send_vector[j] = received_vector[k];
-			// calcula o proximo
-			next = log (nlog) / log (2);
-			next = (rank+(pow (2,next)));
-			MPI_Send(send_vector, send_size, MPI_INT, next, tag,
-			    MPI_COMM_WORLD);
-		}
-		Sort(received_vector,0, send_size);
-		if (last_one == 1) {
-			MPI_Send(received_vector, received_size, MPI_INT,
-			    received_from, tag, MPI_COMM_WORLD);
-		} else {
-			while(send_size != original_size){
-				MPI_Recv(send_vector, send_size, MPI_INT,
-				    MPI_ANY_SOURCE, tag, MPI_COMM_WORLD, &status);
-				MPI_Get_elements(&status, MPI_INT, &received_size);
-				old_size = send_size;
-				send_size = send_size + received_size; 
-				send_one = received_size;
-				if (received_size == 1)
-					// incrementa send_one para não duplicar em i = 1
-					send_one++;
-				for (i = send_one, j = 0; i < send_size; i++, j++)
-					received_vector[i] = send_vector[j];
-				Merge(received_vector, 0, old_size, send_size);
-			}
-			MPI_Send(received_vector, original_size, MPI_INT,
-			    received_from, tag, MPI_COMM_WORLD);
-		}
-	}
-
-
-
-
 
 	MPI_Finalize();
+	free(readv);
 
 	return (0);
 }
