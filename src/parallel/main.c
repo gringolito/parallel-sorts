@@ -24,13 +24,17 @@
 #include <errno.h>
 #include <sys/time.h>
 #include <utils.h>
-#include <insertion_sort.h>
+#include <rank_sort.h>
+#include <merge_sort.h>
 #include <mpi.h>
 
 #define MAX_ELEM                                    (100000)
 #define MPI_TAG                                     (0)
 #define MPI_TERMINATE                               (-1)
 #define FILENAME                                    "sorted_vector.txt"
+
+// Not a good pratice, but it makes sense that variable be global
+size_t size;
 
 void
 print_usage (void)
@@ -43,19 +47,20 @@ print_usage (void)
 static inline void
 divide (int *recv, size_t recv_size, size_t send_size, int id)
 {
+	int depth;
 	int next;
 	int *sendv = &recv[recv_size - send_size];
 
-	// CHECK THIS CALCULE
-	nlog = ntotal / send_size;
-	next = log (nlog) / log (2);
-	next = (rank+(pow (2,next)));
+	depth = (size / recv_size) / 2;
+	next = id + (1 << depth);
+	print_debug("size=%zu recv_size=%zu depth=%d id=%d next=%d", size,
+	    recv_size, depth, id, next);
 
 	MPI_Send(sendv, send_size, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
 }
 
 static inline void
-conquer (int *recv, size_t sent_size, size_t sort_size, int id);
+conquer (int *recv, size_t sent_size, size_t sort_size)
 {
 	int count;
 	size_t received = 0;
@@ -72,12 +77,11 @@ conquer (int *recv, size_t sent_size, size_t sort_size, int id);
 	}
 }
 
-static inline void
+static void
 divide_and_conquer (int *recv, const size_t recv_size,
     const size_t conquer_size, int id)
 {
 	int has_divided = 0;
-	int *sort;
 	size_t my_size = recv_size;
 	size_t send_size;
 	size_t sent = 0;
@@ -93,24 +97,23 @@ divide_and_conquer (int *recv, const size_t recv_size,
 	merge_sort(recv, 0, my_size);
 
 	if (has_divided) {
-		conquer(recv, sent, my_size, id);
+		conquer(recv, sent, my_size);
 	}
-
-	return (sortv);
 }
 
 int
 main (int argc, const char **argv)
 {
+	int ret;
 	int id;
 	int jobs;
 	int *readv;
-	int *sortv;
-	int *recv;
 	size_t i;
-	size_t size;
 	size_t recv_size;
 	size_t conquer_size;
+	FILE *fd;
+	struct timeval begin;
+	struct timeval end;
 	MPI_Status status;
 
 	prgname = argv[0];
@@ -134,7 +137,7 @@ main (int argc, const char **argv)
 	conquer_size = size / jobs;
 
 	if (!id) {
-		fd = fopen(file, "r");
+		fd = fopen(argv[1], "r");
 		if (!fd) {
 			print_errno("fopen() failed!");
 			exit(1);
@@ -150,15 +153,15 @@ main (int argc, const char **argv)
 		}
 		fclose(fd);
 
-		gettimeofday(&ti, NULL);
+		gettimeofday(&begin, NULL);
 		divide_and_conquer(readv, size, conquer_size, id);
-		gettimeofday(&tf, NULL);
+		gettimeofday(&end, NULL);
 		print_time(begin, end);
 		SAVE_RESULTS(RESULTS_WRITE, readv, size);
 	} else {
 		MPI_Recv(readv, size, MPI_INT, MPI_ANY_SOURCE, MPI_TAG,
 		    MPI_COMM_WORLD, &status);
-		MPI_Get_elements(&status, MPI_INT, &recv_size);
+		MPI_Get_elements(&status, MPI_INT, (int *)&recv_size);
 		divide_and_conquer(readv, recv_size, conquer_size, id);
 		MPI_Send(readv, recv_size, MPI_INT, status.MPI_SOURCE,
 		    MPI_TAG, MPI_COMM_WORLD);
