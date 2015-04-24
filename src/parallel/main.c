@@ -23,6 +23,7 @@
 #include <string.h>
 #include <errno.h>
 #include <sys/time.h>
+#include <math.h>
 #include <utils.h>
 #include <rank_sort.h>
 #include <merge_sort.h>
@@ -51,7 +52,8 @@ divide (int *recv, size_t recv_size, size_t send_size, int id)
 	int next;
 	int *sendv = &recv[recv_size - send_size];
 
-	depth = (size / recv_size) / 2;
+	depth = size / (send_size * 2);
+	depth = (int)log2f(depth);
 	next = id + (1 << depth);
 	print_debug("size=%zu recv_size=%zu depth=%d id=%d next=%d", size,
 	    recv_size, depth, id, next);
@@ -88,6 +90,8 @@ divide_and_conquer (int *recv, const size_t recv_size,
 
 	while (my_size > conquer_size) {
 		send_size = my_size / 2;
+//		print_debug("id=%d recv=%zu my=%zu conquer=%zu send=%zu", id,
+//		    recv_size, my_size, conquer_size, send_size);
 		my_size -= send_size;
 		divide(recv, recv_size, send_size, id);
 		sent += send_size;
@@ -107,9 +111,9 @@ main (int argc, const char **argv)
 	int ret;
 	int id;
 	int jobs;
+	int recv_size;
 	int *readv;
 	size_t i;
-	size_t recv_size;
 	size_t conquer_size;
 	FILE *fd;
 	struct timeval begin;
@@ -134,7 +138,7 @@ main (int argc, const char **argv)
 	MPI_Comm_size(MPI_COMM_WORLD, &jobs);
 
 	readv = calloc(size, sizeof(*readv));
-	conquer_size = size / jobs;
+	conquer_size = (size / jobs) + 1;
 
 	if (!id) {
 		fd = fopen(argv[1], "r");
@@ -161,7 +165,7 @@ main (int argc, const char **argv)
 	} else {
 		MPI_Recv(readv, size, MPI_INT, MPI_ANY_SOURCE, MPI_TAG,
 		    MPI_COMM_WORLD, &status);
-		MPI_Get_elements(&status, MPI_INT, (int *)&recv_size);
+		MPI_Get_elements(&status, MPI_INT, &recv_size);
 		divide_and_conquer(readv, recv_size, conquer_size, id);
 		MPI_Send(readv, recv_size, MPI_INT, status.MPI_SOURCE,
 		    MPI_TAG, MPI_COMM_WORLD);

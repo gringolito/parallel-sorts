@@ -31,7 +31,7 @@ MPI_ARGS=-n
 # Execution vars
 VECTOR=var/vetor.txt
 EXECUTIONS=$(seq 1 29)
-PROCESSORS="2 4 8"
+PROCESSORS="2 4 8 16"
 ELEMENTS="50000 75000 100000"
 
 
@@ -58,7 +58,7 @@ if [ ! -x $PAR_BIN ]; then
 	exit 1
 fi
 
-if [ "$1" != "--lad" ] && [ "$1" != "--linux" ]; then
+if [ "$1" != "--lad" ] && [ "$1" != "--linux" ] && [ "$1" != "" ]; then
 	print_usage
 fi
 

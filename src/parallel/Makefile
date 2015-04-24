@@ -13,7 +13,7 @@
 CC=mpicc
 #CFLAGS=-Wall -Wextra -std=c99 -pipe -O0 -g3
 CFLAGS=-Wall -Wextra -std=c99 -pipe -O3 -J5 -march=native
-LDFLAGS=
+LDFLAGS=-lm
 EXTRA_CFLAGS=-DPROG_NAME=\"$(TARGET)\"
 DEBUG=no
 LIB_PATH=../../lib
