@@ -108,20 +108,10 @@ for i in $ELEMENTS; do
 	done
 done
 
-SED_STR="s|.*: \([0-9]*\)s:\([0-9]*\)ms:\([0-9]*\)us|\1.\2|"
 echo -ne "Processing results"
-echo -ne "" > $STATS_FILE
-FILES=$(ls $LOG_DIR)
-for file in $FILES; do
-	sed -i.bkp -e '/^The/d' -e "$SED_STR" $LOG_DIR/$file
-#	$STATS_BIN ${file}.res $STATS_FILE
-	RET=$?
-	if [ $RET -ne 0 ]; then
-		echo -e " [FAIL]"
-		print_end $RET
-	fi
-done
-echo -e " [DONE] ... Results can be found at $STATS_FILE"
+$STATS_BIN $LOG_DIR $STATS_FILE
+echo -e " [DONE]"
+echo -e "\tStatistics can be found at $STATS_FILE"
 
 print_end 0
 
