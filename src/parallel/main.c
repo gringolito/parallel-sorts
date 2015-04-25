@@ -45,22 +45,39 @@ print_usage (void)
 	printf("\tSIZE Size of vector (Maximum size: %d)\n", MAX_ELEM);
 }
 
+/**
+ * @brief
+ *
+ * @param recv
+ * @param recv_size
+ * @param send_size
+ * @param id
+ */
 static inline void
 divide (int *recv, size_t recv_size, size_t send_size, int id)
 {
 	int depth;
-	int next;
+	int child;
 	int *sendv = &recv[recv_size - send_size];
 
+	// Calculate tree depth and child ID
 	depth = size / (send_size * 2);
 	depth = (int)log2f(depth);
-	next = id + (1 << depth);
-	print_debug("size=%zu recv_size=%zu depth=%d id=%d next=%d", size,
-	    recv_size, depth, id, next);
+	child = id + (1 << depth);
 
-	MPI_Send(sendv, send_size, MPI_INT, next, MPI_TAG, MPI_COMM_WORLD);
+	print_debug("size=%zu recv_size=%zu depth=%d id=%d child=%d", size,
+	    recv_size, depth, id, child);
+
+	MPI_Send(sendv, send_size, MPI_INT, child, MPI_TAG, MPI_COMM_WORLD);
 }
 
+/**
+ * @brief
+ *
+ * @param recv
+ * @param sent_size
+ * @param sort_size
+ */
 static inline void
 conquer (int *recv, size_t sent_size, size_t sort_size)
 {
@@ -73,12 +90,21 @@ conquer (int *recv, size_t sent_size, size_t sort_size)
 		MPI_Recv(&recv[ordered], sent_size, MPI_INT, MPI_ANY_SOURCE,
 		    MPI_TAG, MPI_COMM_WORLD, &status);
 		MPI_Get_elements(&status, MPI_INT, &count);
+
 		received += count;
 		merge_vector(recv, 0, ordered, received + sort_size);
 		ordered += count;
 	}
 }
 
+/**
+ * @brief
+ *
+ * @param recv
+ * @param recv_size
+ * @param conquer_size
+ * @param id
+ */
 static void
 divide_and_conquer (int *recv, const size_t recv_size,
     const size_t conquer_size, int id)
@@ -89,18 +115,19 @@ divide_and_conquer (int *recv, const size_t recv_size,
 	size_t sent = 0;
 
 	while (my_size > conquer_size) {
+		// Too many elements, split-it with (more) one child
 		send_size = my_size / 2;
-//		print_debug("id=%d recv=%zu my=%zu conquer=%zu send=%zu", id,
-//		    recv_size, my_size, conquer_size, send_size);
 		my_size -= send_size;
 		divide(recv, recv_size, send_size, id);
 		sent += send_size;
 		has_divided = 1;
 	}
 
+	// Sort my slice of data
 	merge_sort(recv, 0, my_size);
 
 	if (has_divided) {
+		// Aquire data from my childs just if I've
 		conquer(recv, sent, my_size);
 	}
 }
@@ -141,13 +168,16 @@ main (int argc, const char **argv)
 	conquer_size = (size / jobs) + 1;
 
 	if (!id) {
+		// Parent process
 		fd = fopen(argv[1], "r");
 		if (!fd) {
 			print_errno("fopen() failed!");
 			exit(1);
 		}
+
 		print_debug("conquer=%zu elements=%zu jobs=%d", conquer_size,
 		    size, jobs);
+
 		for (i = 0; i < size; i++) {
 			ret = fscanf(fd, "%d", &readv[i]);
 			if (ret < 0) {
@@ -160,18 +190,27 @@ main (int argc, const char **argv)
 		gettimeofday(&begin, NULL);
 		divide_and_conquer(readv, size, conquer_size, id);
 		gettimeofday(&end, NULL);
+
 		print_time(begin, end);
+
 		SAVE_RESULTS(RESULTS_WRITE, readv, size);
+		printf("The result can be found at file '%s'\n", FILENAME);
+
 	} else {
+		// Children process
 		MPI_Recv(readv, size, MPI_INT, MPI_ANY_SOURCE, MPI_TAG,
 		    MPI_COMM_WORLD, &status);
 		MPI_Get_elements(&status, MPI_INT, &recv_size);
+
 		divide_and_conquer(readv, recv_size, conquer_size, id);
+
+		// All children processes has to send their data to parent
 		MPI_Send(readv, recv_size, MPI_INT, status.MPI_SOURCE,
 		    MPI_TAG, MPI_COMM_WORLD);
 	}
 
 	MPI_Finalize();
+
 	free(readv);
 
 	return (0);
