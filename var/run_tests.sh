@@ -29,10 +29,10 @@ MPI_BIN=mpirun
 MPI_ARGS=-n
 
 # Execution vars
-VECTOR=var/vetor.txt
+VECTOR=var/big_vector.txt
 EXECUTIONS=$(seq 1 29)
 PROCESSORS="2 4 8 16"
-ELEMENTS="50000 75000 100000"
+ELEMENTS="100000 250000 500000"
 
 
 print_usage() {

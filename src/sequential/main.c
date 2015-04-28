@@ -26,7 +26,7 @@
 #include <utils.h>
 #include <merge_sort.h>
 
-#define MAX_ELEM                       (100000)
+#define MAX_ELEM                       (500000)
 #define FILENAME                       "sorted_vector.txt"
 
 void

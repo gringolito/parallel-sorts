@@ -29,7 +29,7 @@
 #include <merge_sort.h>
 #include <mpi.h>
 
-#define MAX_ELEM                                    (100000)
+#define MAX_ELEM                                    (500000)
 #define MPI_TAG                                     (0)
 #define MPI_TERMINATE                               (-1)
 #define FILENAME                                    "sorted_vector.txt"

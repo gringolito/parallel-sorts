@@ -15,6 +15,7 @@
 #define __FUTZIG_RANK_SORT_H
 
 #include <stdlib.h>
+#include <string.h>
 #include <debug.h>
 
 static inline void
@@ -36,12 +37,12 @@ rank_sort (int *fuzzy, int *sort, int size)
 }
 
 static inline void
-merge_vector (int *vector, int begin, int mid, int end)
+merge_vector (int *vector, const int begin, const int mid, const int end)
 {
 	int ib = begin;
 	int im = mid;
-	int j;
-	int size = end - begin;
+	size_t j;
+	size_t size = end - begin;
 	int tmp[size];
 
 	for (j = 0; j < size; j++) {
@@ -54,6 +55,7 @@ merge_vector (int *vector, int begin, int mid, int end)
 		}
 	}
 
+//	memcpy(&vector[begin], tmp, size);
 	for (j = 0, ib = begin; ib < end; j++, ib++) {
 		vector[ib] = tmp[j];
 	}
